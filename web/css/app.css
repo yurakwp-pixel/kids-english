@@ -1,0 +1,25 @@
+/* 한 화면에 꽉 차게, 스크롤 없음. 글씨는 28px 이상. */
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #fff8e7;
+  color: #2b2a4c;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 28px;
+}
+
+main {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+h1 {
+  font-size: 56px;
+  margin: 0;
+}
