@@ -298,7 +298,10 @@
       a.textContent = "그림만 크게 보기";
       a.target = "_blank";
       a.rel = "noopener";
-      a.href = URL.createObjectURL(new Blob([svg.outerHTML], { type: "image/svg+xml" }));
+      // outerHTML 은 HTML 방식으로 써서 flowchart 글자 속 <br> 이 닫히지 않고, image/svg+xml 로는 열리지 않는다.
+      // XMLSerializer 는 올바른 XML(<br />, xmlns 포함)로 써 준다.
+      const xml = new XMLSerializer().serializeToString(svg);
+      a.href = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml" }));
       zoomUrls.push(a.href);
       box.append(a);
     }
