@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>kids-english 문서</title>
+  <!--
+    개발 문서 뷰어. 부모(개발자)용 페이지라 CDN을 쓴다. 아이 화면(web/)은 CDN을 쓰지 않는다.
+    서버(run.py)가 /docs/ 에서 이 파일을 내주고, 아래 DOCS 의 path 는 /docs/ 기준 상대 경로다.
+  -->
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #fbfaf7;
+      --panel: #f3f0e9;
+      --text: #1f2328;
+      --muted: #5f6672;
+      --line: #ddd7ca;
+      --accent: #2c6e49;
+      --accent-soft: #e1eee5;
+      --code-bg: #efebe2;
+      --link: #1d5fa6;
+      --warn-bg: #fff4e0;
+      --warn-text: #7a4b00;
+      /* 다이어그램 카드는 다크 모드에서도 밝게 둔다. Mermaid 의 C4 그림은 화살표 글자색이
+         어두운 회색으로 고정돼 있어서, 어두운 바탕에서는 ①②③ 이름이 안 보인다. */
+      --diagram-bg: #f4f1ea;
+      --diagram-line: #ddd7ca;
+      --diagram-link: #1d5fa6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #15171b;
+        --panel: #1c1f25;
+        --text: #e5e7ea;
+        --muted: #9aa2ad;
+        --line: #2f343c;
+        --accent: #80c99d;
+        --accent-soft: #233629;
+        --code-bg: #23272e;
+        --link: #8cb9ef;
+        --warn-bg: #3a2c12;
+        --warn-text: #f3cf8a;
+        --diagram-bg: #e9e6df;
+        --diagram-line: #3a3f48;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.75 system-ui, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    }
+    .layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); min-height: 100vh; }
+
+    nav {
+      background: var(--panel);
+      border-right: 1px solid var(--line);
+      padding: 22px 14px;
+      position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    nav .brand { margin: 0 6px 2px; font-size: 16px; font-weight: 700; }
+    nav .sub { margin: 0 6px 16px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    nav ul { list-style: none; margin: 0; padding: 0; }
+    nav li + li { margin-top: 2px; }
+    nav a {
+      display: block; padding: 7px 10px; border-radius: 8px;
+      color: var(--text); text-decoration: none; font-size: 14px; line-height: 1.45;
+    }
+    nav a:hover { background: var(--accent-soft); }
+    nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+    nav .kind { font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+    main { min-width: 0; padding: 30px clamp(16px, 4vw, 48px) 72px; }
+    .docbar {
+      max-width: 900px; margin: 0 auto 10px;
+      display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline;
+      font-size: 13px; color: var(--muted);
+    }
+    .docbar code { background: none; padding: 0; overflow-wrap: anywhere; }
+    .docbar a { color: var(--link); }
+    article { max-width: 900px; margin: 0 auto; overflow-wrap: break-word; }
+
+    article h1 { font-size: 1.9em; line-height: 1.3; margin: 0.2em 0 0.6em; }
+    article h2 { font-size: 1.4em; line-height: 1.35; margin: 2em 0 0.6em; padding-top: 0.4em; border-top: 1px solid var(--line); }
+    article h3 { font-size: 1.15em; margin: 1.6em 0 0.5em; }
+    article a { color: var(--link); }
+    article hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+    article hr + h2 { border-top: 0; padding-top: 0; margin-top: 0; }
+    article blockquote {
+      margin: 1em 0; padding: 0.4em 1em;
+      border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0;
+    }
+    article blockquote p { margin: 0.4em 0; }
+    article img { max-width: 100%; height: auto; }
+    code {
+      font-family: ui-monospace, "Cascadia Code", Consolas, "D2Coding", monospace;
+      font-size: 0.9em; background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px;
+    }
+    pre {
+      background: var(--code-bg); padding: 14px 16px; border-radius: 10px;
+      overflow-x: auto; line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; font-size: 0.88em; }
+    .table-wrap { overflow-x: auto; margin: 1em 0; }
+    table { border-collapse: collapse; font-size: 0.94em; }
+    th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--panel); }
+
+    .mermaid-box {
+      margin: 1.2em 0; padding: 12px; overflow-x: auto;
+      background: var(--diagram-bg); border: 1px solid var(--diagram-line); border-radius: 10px;
+    }
+    .mermaid-box svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+    .mermaid-box .zoom { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--diagram-link); }
+    .notice {
+      padding: 12px 16px; border-radius: 10px;
+      background: var(--warn-bg); color: var(--warn-text); white-space: pre-wrap;
+    }
+    .frame-wrap iframe {
+      width: 100%; height: 78vh; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+    }
+
+    @media (max-width: 760px) {
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 12px; }
+      nav .sub { margin-bottom: 10px; }
+      nav ul { display: flex; flex-wrap: wrap; gap: 6px; }
+      nav li + li { margin-top: 0; }
+      nav a { padding: 5px 10px; border: 1px solid var(--line); font-size: 13.5px; }
+      nav .kind { display: none; }
+      main { padding: 18px 16px 56px; }
+      article h1 { font-size: 1.55em; }
+      .frame-wrap iframe { height: 70vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav aria-label="문서 목록">
+      <p class="brand">kids-english 문서</p>
+      <p class="sub">설계 · 계획 · 다이어그램 · 워크스루</p>
+      <ul id="doc-list"></ul>
+    </nav>
+    <main>
+      <div class="docbar" id="docbar"></div>
+      <article id="content"><p>불러오는 중…</p></article>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+  <script>
+    // 문서를 추가할 때는 이 배열에 한 줄을 더한다. path 는 docs/ 기준 상대 경로.
+    // .md 는 marked 로 그리고, .html 은 iframe 으로 보여 준다.
+    const DOCS = [
+      { title: "설계 spec", path: "superpowers/specs/2026-10-22-kids-english-design.md" },
+      { title: "실행 계획 M0–M2", path: "superpowers/plans/2026-10-22-m0-m2.md" },
+      { title: "벤치마크: 알레프키즈", path: "benchmark/aleph-kids.html" },
+      { title: "벤치마크: 슈니비니", path: "benchmark/shunibini.md" },
+      { title: "C4 Context (시스템과 바깥)", path: "architecture/c4-context.md" },
+      { title: "M0 워크스루: 뼈대", path: "walkthrough/m0-scaffold.md" },
+      { title: "ADR 템플릿", path: "adr/0000-template.md" },
+    ];
+
+    const listEl = document.getElementById("doc-list");
+    const barEl = document.getElementById("docbar");
+    const contentEl = document.getElementById("content");
+    let renderTicket = 0;
+    let zoomUrls = [];
+
+    // 해시(#/경로)로 들어온 값은 docs/ 안의 .md/.html 상대 경로만 받는다(다른 사이트나 상위 폴더는 거절).
+    function isSafeDocPath(path) {
+      if (!path || path.startsWith("/") || path.includes("\\") || path.includes(":")) return false;
+      if (path.split("/").some((seg) => seg === ".." || seg === "." || seg === "")) return false;
+      return /\.(md|html)$/i.test(path);
+    }
+
+    function encodePath(path) {
+      return path.split("/").map(encodeURIComponent).join("/");
+    }
+
+    function pathFromHash() {
+      const raw = location.hash.startsWith("#/") ? location.hash.slice(2) : "";
+      try { return decodeURIComponent(raw); } catch { return ""; }
+    }
+
+    function buildNav() {
+      for (const doc of DOCS) {
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = "#/" + doc.path;
+        a.dataset.path = doc.path;
+        a.textContent = doc.title;
+        if (doc.path.endsWith(".html")) {
+          const kind = document.createElement("span");
+          kind.className = "kind";
+          kind.textContent = "HTML";
+          a.append(kind);
+        }
+        li.append(a);
+        listEl.append(li);
+      }
+    }
+
+    function markCurrent(path) {
+      for (const a of listEl.querySelectorAll("a")) {
+        if (a.dataset.path === path) a.setAttribute("aria-current", "page");
+        else a.removeAttribute("aria-current");
+      }
+    }
+
+    function showNotice(message) {
+      contentEl.replaceChildren();
+      const p = document.createElement("p");
+      p.className = "notice";
+      p.textContent = message;
+      contentEl.append(p);
+    }
+
+    function setDocbar(path) {
+      barEl.replaceChildren();
+      const code = document.createElement("code");
+      code.textContent = "docs/" + path;
+      const raw = document.createElement("a");
+      raw.href = encodePath(path);
+      raw.target = "_blank";
+      raw.rel = "noopener";
+      raw.textContent = path.endsWith(".html") ? "새 탭에서 열기" : "원문 보기";
+      barEl.append(code, raw);
+    }
+
+    // 문서 안의 링크를 문서 파일 위치 기준으로 다시 맞춘다.
+    // 다른 .md 문서나 DOCS 에 있는 파일이면 뷰어 안에서 열고, 바깥 사이트는 새 탭으로 연다.
+    function fixLinks(root, docPath) {
+      const docsBase = new URL("./", location.href);
+      const fileBase = new URL(encodePath(docPath), docsBase);
+      for (const a of root.querySelectorAll("a[href]")) {
+        const href = a.getAttribute("href");
+        if (href.startsWith("#")) {
+          let id = href.slice(1);
+          try { id = decodeURIComponent(id); } catch { /* 그대로 쓴다 */ }
+          a.addEventListener("click", (event) => {
+            event.preventDefault();
+            document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+          });
+          continue;
+        }
+        let url;
+        try { url = new URL(href, fileBase); } catch { continue; }
+        if (url.origin !== location.origin) {
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          continue;
+        }
+        if (url.pathname.startsWith(docsBase.pathname)) {
+          let rel = "";
+          try { rel = decodeURIComponent(url.pathname.slice(docsBase.pathname.length)); } catch { /* 아래로 */ }
+          if (isSafeDocPath(rel) && (rel.endsWith(".md") || DOCS.some((d) => d.path === rel))) {
+            a.href = "#/" + rel;
+            continue;
+          }
+        }
+        a.href = url.href;
+        a.target = "_blank";
+        a.rel = "noopener";
+      }
+    }
+
+    // 제목에 GitHub 와 같은 규칙으로 id 를 붙인다. 문서 안의 [글](#제목) 링크가 그대로 동작한다.
+    function addHeadingIds(root) {
+      const seen = new Map();
+      for (const h of root.querySelectorAll("h1, h2, h3, h4")) {
+        const base = h.textContent.trim().toLowerCase()
+          .replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s/g, "-") || "section";
+        const n = seen.get(base) || 0;
+        seen.set(base, n + 1);
+        h.id = n ? `${base}-${n}` : base;
+      }
+    }
+
+    function wrapTables(root) {
+      for (const table of root.querySelectorAll("table")) {
+        const wrap = document.createElement("div");
+        wrap.className = "table-wrap";
+        table.replaceWith(wrap);
+        wrap.append(table);
+      }
+    }
+
+    // 큰 그림은 본문 폭에 맞춰 줄어든다. 원래 크기로 보고 싶을 때 그림만 새 탭에서 연다.
+    function addZoomLink(box) {
+      const svg = box.querySelector("svg");
+      if (!svg) return;
+      const a = document.createElement("a");
+      a.className = "zoom";
+      a.textContent = "그림만 크게 보기";
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.href = URL.createObjectURL(new Blob([svg.outerHTML], { type: "image/svg+xml" }));
+      zoomUrls.push(a.href);
+      box.append(a);
+    }
+
+    // marked 는 ```mermaid 블록을 <pre><code class="language-mermaid"> 로 만든다. 그걸 그림 상자로 바꿔 그린다.
+    async function renderMermaid(root, ticket) {
+      const blocks = [...root.querySelectorAll("pre > code.language-mermaid")];
+      if (!blocks.length) return;
+      if (!window.mermaid) {
+        for (const code of blocks) code.parentElement.insertAdjacentHTML("beforebegin",
+          '<p class="notice">mermaid 를 불러오지 못해 다이어그램을 글자로 보여 줍니다(인터넷 연결 확인).</p>');
+        return;
+      }
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        theme: "default", // 카드가 늘 밝은 바탕이라 밝은 테마 하나만 쓴다(위 --diagram-bg 참고)
+        fontFamily: getComputedStyle(document.body).fontFamily,
+      });
+      // 그림마다 id 를 직접 정한다. mermaid.run 에 맡기면 같은 순간에 그린 두 그림이 같은 id 를 받아
+      // 두 번째 그림이 첫 번째 상자에 겹쳐 그려진다.
+      for (const [i, code] of blocks.entries()) {
+        const source = code.textContent;
+        const box = document.createElement("div");
+        box.className = "mermaid-box";
+        code.parentElement.replaceWith(box);
+        try {
+          const { svg, bindFunctions } = await mermaid.render(`doc-mermaid-${ticket}-${i}`, source);
+          if (ticket !== renderTicket) return;
+          box.innerHTML = svg;
+          bindFunctions?.(box);
+          addZoomLink(box);
+        } catch (err) {
+          if (ticket !== renderTicket) return;
+          const notice = document.createElement("p");
+          notice.className = "notice";
+          notice.textContent = "다이어그램을 그리지 못했습니다: " + (err && err.message ? err.message : err) + "\n\n" + source;
+          box.replaceChildren(notice);
+        }
+      }
+    }
+
+    async function show(path) {
+      const ticket = ++renderTicket;
+      zoomUrls.forEach((url) => URL.revokeObjectURL(url));
+      zoomUrls = [];
+      markCurrent(path);
+      setDocbar(path);
+      const entry = DOCS.find((d) => d.path === path);
+      document.title = (entry ? entry.title : path) + " · kids-english 문서";
+
+      if (path.endsWith(".html")) {
+        contentEl.replaceChildren();
+        const wrap = document.createElement("div");
+        wrap.className = "frame-wrap";
+        const frame = document.createElement("iframe");
+        frame.src = encodePath(path);
+        frame.title = entry ? entry.title : path;
+        wrap.append(frame);
+        contentEl.append(wrap);
+        return;
+      }
+
+      if (!window.marked) {
+        showNotice("marked 를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 새로고침하세요.\n원문은 위의 '원문 보기'로 열 수 있습니다.");
+        return;
+      }
+      contentEl.innerHTML = "<p>불러오는 중…</p>";
+      let text;
+      try {
+        const res = await fetch(encodePath(path), { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        text = await res.text();
+      } catch (err) {
+        if (ticket === renderTicket) showNotice(`문서를 불러오지 못했습니다: docs/${path}\n(${err.message})`);
+        return;
+      }
+      if (ticket !== renderTicket) return;
+      contentEl.innerHTML = marked.parse(text);
+      fixLinks(contentEl, path);
+      addHeadingIds(contentEl);
+      wrapTables(contentEl);
+      window.scrollTo(0, 0);
+      await renderMermaid(contentEl, ticket);
+    }
+
+    function route() {
+      const path = pathFromHash();
+      if (!path) {
+        location.replace("#/" + DOCS[0].path);
+        return;
+      }
+      if (!isSafeDocPath(path)) {
+        renderTicket++;
+        markCurrent(null);
+        barEl.replaceChildren();
+        showNotice("열 수 없는 경로입니다: " + path + "\n문서 목록에서 고르세요.");
+        return;
+      }
+      show(path);
+    }
+
+    buildNav();
+    window.addEventListener("hashchange", route);
+    route();
+  </script>
+</body>
+</html>

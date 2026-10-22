@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kids-english",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["run.py", "--port", "8771"],
+      "port": 8771
+    }
+  ]
+}
