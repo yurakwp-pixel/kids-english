@@ -14,6 +14,10 @@
 판정: 맞은 패턴이 accept[0] 이거나 `{object}` 바로 앞이 관사(the/your/a/an/my)인 틀이면 exact, 다른 변형은 partial.
 물건 문법만으로 맞으면 exact. 자리에 들어간 물건 말이 정순서가 아니면 partial 이다.
 
+아이 말 앞뒤의 군소리("um kick the ball", "kick the ball uh")는 뗀다: 후보를 통째로 맞춰 보고 맞는 읽기가 없을 때만
+앞뒤의 `FILLERS`("uh", "um", "hmm", "ah", "er")를 떼고 한 번 더 본다. 뗀 군소리는 판정을 바꾸지 않는다("um kick ball" 도 partial).
+통째로 먼저 보는 까닭: 단어장에 "uh oh" 같은 말이 들어와도 그대로 맞게 하려고(G4).
+
 지키는 것: 멍멍이는 음식만 문다(아니면 그 읽기는 맞지 않음), `put_on` 은 입을 수 있는 물건만, 색·크기를 못 가지는 물건은
 그 속성을 버린다, `add` 에는 서버가 정한 id(`server/ids.py`)를 넣고 `place` 는 넣지 않는다, ops 는 `catalog.max_ops` 까지.
 한글이 든 후보와 글자 그대로의 중괄호(`{`, `}`)가 든 후보는 건너뛴다. 입력(장면, 단어장)은 고치지 않는다.
@@ -28,7 +32,7 @@ from typing import Any, Literal, Sequence
 from server.canned import praise
 from server.catalog import ACTORS, Catalog
 from server.ids import next_ids
-from server.text import PLACEHOLDER, has_hangul, normalize
+from server.text import FILLERS, PLACEHOLDER, has_hangul, normalize
 from server.words import Word, WordBank
 
 Grade = Literal["exact", "partial"]
@@ -105,6 +109,9 @@ def match(alternatives: Sequence[str], bank: WordBank, catalog: Catalog, scene: 
         if not tokens:
             continue
         found = _read(tokens, grammar, catalog, items)
+        core = _without_fillers(tokens)
+        if found is None and core and core != tokens:  # "um kick the ball", "kick the ball uh"
+            found = _read(core, grammar, catalog, items)
         if found is not None:
             return FastMatch(ops=found.ops[:catalog.max_ops], say=_say(turn_id, found.sentence),
                              grade=found.grade, word_ids=list(found.word_ids))
@@ -119,6 +126,16 @@ def _tokens(alternative: object) -> list[str]:
     if "{" in folded or "}" in folded:  # 아이 말에 `{object}` 가 들어와 틀 자체와 맞는 일을 막는다
         return []
     return normalize(alternative).split()
+
+
+def _without_fillers(tokens: list[str]) -> list[str]:
+    """앞뒤의 군소리(`server/text.FILLERS`)를 뗀 낱말. 가운데의 군소리("kick uh the ball")는 그대로 둔다."""
+    start, end = 0, len(tokens)
+    while start < end and tokens[start] in FILLERS:
+        start += 1
+    while end > start and tokens[end - 1] in FILLERS:
+        end -= 1
+    return tokens[start:end]
 
 
 class _Grammar:

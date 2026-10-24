@@ -20,7 +20,7 @@ _APOSTROPHES = frozenset("'‘’ʼ`")
 # 단어장 accept 의 물건 자리 표시("throw out the {object}"). normalize 가 구두점처럼 지우지 않는 유일한 중괄호 말이다.
 PLACEHOLDER = "{object}"
 
-# 말 사이에 끼는 소리. 이것만 들렸으면 아이가 아직 말하지 않은 것으로 본다.
+# 말 사이에 끼는 소리. 이것만 들렸으면 아이가 아직 말하지 않은 것으로 본다. fastpath 는 말 앞뒤의 이것을 뗀다.
 FILLERS = frozenset({"uh", "um", "hmm", "ah", "er"})
 
 

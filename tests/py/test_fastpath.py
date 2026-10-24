@@ -439,6 +439,45 @@ def test_two_placeholders_never_match(catalog):
     assert match(["kick egg egg"], bank, catalog, [], turn_id=0) is None
 
 
+# ---------------------------------------------------------------- 아이 말 앞뒤의 군소리("um", "uh")
+
+FILLER_CASES = [
+    # (들린 말, 군소리를 뺀 말): 둘의 결과(ops, 대사, 판정, 단어)가 똑같아야 한다
+    ("um kick the ball", "kick the ball"),
+    ("kick the ball uh", "kick the ball"),
+    ("uh um big red egg", "big red egg"),
+    ("hmm kick ball", "kick ball"),  # partial 은 partial 그대로
+    ("kick ball um", "kick ball"),
+    ("er jump ah", "jump"),
+    ("Um, hey Chomp, jump!", "hey chomp jump"),
+    ("um throw out the egg hmm", "throw out the egg"),
+    ("uh two balls", "two balls"),
+]
+
+
+@pytest.mark.parametrize("said, plain", FILLER_CASES, ids=[c[0] for c in FILLER_CASES])
+def test_leading_and_trailing_fillers_are_ignored(bank, catalog, said, plain):
+    scene = [EGG1]
+    want = match([plain], bank, catalog, scene, turn_id=3)
+    assert want is not None
+    assert match([said], bank, catalog, scene, turn_id=3) == want  # 뗀 군소리는 판정을 바꾸지 않는다
+
+
+def test_a_filler_in_the_middle_is_kept(bank, catalog):
+    assert match(["kick uh the ball"], bank, catalog, [], turn_id=0) is None
+
+
+def test_fillers_alone_still_match_nothing(bank, catalog):
+    assert match(["um uh", "hmm", "ah er"], bank, catalog, [], turn_id=0) is None
+
+
+def test_a_word_made_of_fillers_matches_as_said(catalog):
+    # 단어장에 "uh oh" 같은 말이 들어와도(G4) 그대로 맞는다: 군소리는 통째로 맞는 읽기가 없을 때만 뗀다
+    bank = WordBank([_chomp_word("uh-oh", ["uh oh"])])
+    found = match(["uh oh"], bank, catalog, [], turn_id=0)
+    assert found is not None and found.grade == "exact" and found.word_ids == ["uh-oh"]
+
+
 # ---------------------------------------------------------------- 입력과 장면을 안전하게
 
 def test_non_string_alternatives_skipped(bank, catalog):
