@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Iterator
 
 from server.canned import fallback_reply
-from server.llm import LLM, LLMTimeout
+from server.llm import LLM, LLMBillingRefused, LLMTimeout
 from server.prompt_builder import NONE_YET, build_system_prompt, build_turn_message
 from server.reply import parse_reply_text, validate_reply
 from server.session_log import SessionLog, valid_session_id
@@ -203,7 +203,10 @@ class TurnOrchestrator:
             result = self.llm.complete(message, self.timeout_s)
         except Exception as e:  # LLMTimeout, LLMError, 어댑터의 예상 못 한 오류. 메시지 글은 버린다.
             reason = "timeout" if isinstance(e, LLMTimeout) else "error"
-            _warn(f"turn {turn.turn_id}: LLM {type(e).__name__}")
+            if isinstance(e, LLMBillingRefused):  # 정해진 한 줄. 로그에는 클래스 이름만 남는다(아래 error)
+                _warn(f"turn {turn.turn_id}: LLM refused: API-key billing (subscription only; fix auth, restart)")
+            else:
+                _warn(f"turn {turn.turn_id}: LLM {type(e).__name__}")
             return _Answer(fallback_reply(reason, turn.turn_id), "fallback", _ms_since(llm_started), type(e).__name__)
         obj = parse_reply_text(result.text)
         reply, issues = validate_reply(

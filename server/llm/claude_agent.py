@@ -15,7 +15,9 @@
 서버 프로세스 환경에서 물려받으면 안 되는 변수는 `server.config.scrub_llm_env` 가 시작할 때 지운다.
 
 요금 (사용자 규칙 "API 요금 0원"): init 의 `apiKeySource` 가 "none" 이 아니면 `billing_ok` 가 거부하고, 액터가 그 턴을
-interrupt 한 뒤 세션을 끝낸다. 그 뒤 `complete()` 는 모두 `LLMError` 다(놀이는 준비된 대사로 이어진다).
+interrupt 한 뒤 세션을 끝낸다. 거부는 그 `ClaudeAgentLLM` 객체가 사는 동안 유지된다: 뒤의 `start_session` 은 claude.exe 를
+다시 띄우지 않고, `complete()` 는 질의 없이 바로 `LLMBillingRefused` 를 낸다(놀이는 준비된 대사로 이어진다).
+그래서 유료 질의는 서버를 켤 때마다 많아야 한 번이다. 다시 쓰려면 인증을 고친 뒤 서버를 다시 켠다.
 """
 from __future__ import annotations
 
@@ -28,7 +30,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -39,7 +41,7 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
-from server.llm import LLM, LLMError, LLMResult, LLMTimeout
+from server.llm import LLM, LLMBillingRefused, LLMError, LLMResult, LLMTimeout
 
 # 아이용 claude.exe 에만 주는 환경변수. 자동 메모리, CLAUDE.md, 첨부, claude.ai 커넥터, git 안내를 끈다.
 # CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK 는 SDK 가 부모(이 서버) 환경에서 읽는 값이라 여기서는 효과가 없다.
@@ -206,8 +208,9 @@ def _describe_error_result(result: ResultMessage, assistant_error: str | None) -
 class _Session:
     """세션 하나 = 스레드 하나 + 이벤트 루프 하나 + ClaudeSDKClient 하나. 액터만 이 상태를 바꾼다."""
 
-    def __init__(self, options: ClaudeAgentOptions):
+    def __init__(self, options: ClaudeAgentOptions, on_refused: Callable[[str], None] | None = None):
         self.options = options
+        self._on_refused = on_refused  # 요금 지킴이가 거부하면 액터 스레드에서 부른다(이유 한 줄)
         self.stderr_tail: collections.deque[str] = collections.deque(maxlen=40)
         options.stderr = self.stderr_tail.append  # CLI 의 stderr 는 서버 콘솔 대신 여기에 최근 줄만 남긴다
         self.loop = asyncio.new_event_loop()
@@ -216,6 +219,7 @@ class _Session:
         self.client: Any = None
         self.current: _Turn | None = None
         self.failure: str | None = None  # 값이 있으면 세션이 끝났다(이유)
+        self.refused: str | None = None  # 요금 지킴이가 거부한 이유
         self.init_info: dict | None = None
         self.connect_ms: int | None = None
         self._background: set[asyncio.Future] = set()
@@ -254,8 +258,11 @@ class _Session:
                     try:
                         text, model = await self._run_turn(client, turn.message)
                     except _SessionRefused as e:
-                        self.failure = str(e)  # 먼저 적어 둔다: 부른 쪽이 다음 complete 에서 바로 거부를 본다
-                        _settle(turn.future, error=LLMError(str(e)))
+                        # 먼저 적어 둔다: 부른 쪽이 이 턴의 답을 받기 전에 객체 전체가 거부 상태가 된다
+                        self.refused = self.failure = str(e)
+                        if self._on_refused is not None:
+                            self._on_refused(self.refused)
+                        _settle(turn.future, error=LLMBillingRefused(self.refused))
                         break  # async with 를 빠져나가 claude.exe 를 닫는다
                     except _TurnFailed as e:
                         _settle(turn.future, error=LLMError(str(e)))
@@ -276,7 +283,7 @@ class _Session:
             while not self.inbox.empty():  # 아직 줄 서 있던 턴은 바로 실패로 알린다
                 turn = self.inbox.get_nowait()
                 if turn is not _STOP:
-                    _settle(turn.future, error=LLMError(f"claude session is not running ({self.failure})"))
+                    _settle(turn.future, error=self.not_running())
 
     async def _run_turn(self, client: Any, message: str) -> tuple[str, str | None]:
         await client.query(message)
@@ -308,9 +315,14 @@ class _Session:
             raise _TurnFailed(_describe_error_result(result, assistant_error))
         return "".join(parts) or (result.result or ""), model
 
+    def not_running(self) -> LLMError:
+        if self.refused is not None:
+            return LLMBillingRefused(self.refused)
+        return LLMError(f"claude session is not running ({self.failure})")
+
     async def submit(self, turn: _Turn) -> tuple[str, str | None]:
         if self.failure is not None:
-            raise LLMError(f"claude session is not running ({self.failure})")
+            raise self.not_running()
         turn.future = self.loop.create_future()
         self.inbox.put_nowait(turn)
         return await turn.future
@@ -342,6 +354,7 @@ class ClaudeAgentLLM(LLM):
         self.workdir = Path(workdir) if workdir is not None else default_workdir()
         self.__oauth_token = oauth_token  # repr 에도 로그에도 나오지 않는다
         self._session: _Session | None = None
+        self._refused: str | None = None  # 한 번 정해지면 이 객체가 사는 동안 그대로다
 
     def __repr__(self) -> str:
         return f"ClaudeAgentLLM(model={self.model!r}, workdir={str(self.workdir)!r})"
@@ -350,6 +363,15 @@ class ClaudeAgentLLM(LLM):
     def init_info(self) -> dict | None:
         """세션 첫 턴의 `SystemMessage(subtype="init").data`. 첫 답이 오기 전에는 None."""
         return self._session.init_info if self._session else None
+
+    @property
+    def refused(self) -> str | None:
+        """요금 지킴이가 거부한 이유(None = 거부한 적 없음). 한 번 정해지면 이 객체가 사는 동안 바뀌지 않는다."""
+        return self._refused
+
+    def _refuse(self, reason: str) -> None:
+        if self._refused is None:
+            self._refused = reason
 
     @property
     def connect_ms(self) -> int | None:
@@ -362,12 +384,18 @@ class ClaudeAgentLLM(LLM):
         return list(self._session.stderr_tail) if self._session else []
 
     def start_session(self, system_prompt: str) -> None:
-        """시스템 프롬프트를 작업 폴더에 쓰고 claude.exe 를 띄우기 시작한 뒤 바로 돌아온다(연결은 기다리지 않음)."""
+        """시스템 프롬프트를 작업 폴더에 쓰고 claude.exe 를 띄우기 시작한 뒤 바로 돌아온다(연결은 기다리지 않음).
+
+        요금 지킴이가 이미 거부한 객체면 아무것도 띄우지 않는다(연결도 질의도 0). 그때 `complete` 는 `LLMBillingRefused`.
+        """
         self.end_session()
+        if self._refused is not None:
+            return
         self.workdir.mkdir(parents=True, exist_ok=True)
         prompt_path = self.workdir / SYSTEM_PROMPT_FILE
         prompt_path.write_text(system_prompt, encoding="utf-8", newline="\n")
-        session = _Session(build_options(self.model, prompt_path, self.workdir, self.__oauth_token))
+        session = _Session(build_options(self.model, prompt_path, self.workdir, self.__oauth_token),
+                           on_refused=self._refuse)
         self._session = session
         session.thread.start()
 
@@ -380,11 +408,13 @@ class ClaudeAgentLLM(LLM):
         return s.ready.is_set() and s.client is not None and s.failure is None
 
     def complete(self, user_msg: str, timeout_s: float) -> LLMResult:
+        if self._refused is not None:  # 질의를 보내지 않는다
+            raise LLMBillingRefused(self._refused)
         s = self._session
         if s is None:
             raise LLMError("no claude session: call start_session first")
         if s.failure is not None:
-            raise LLMError(f"claude session is not running ({s.failure})")
+            raise s.not_running()
         started = time.perf_counter()
         turn = _Turn(user_msg)
         pending = _schedule(s.loop, s.submit(turn))

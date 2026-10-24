@@ -15,7 +15,7 @@ from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, Tex
 from claude_agent_sdk import CLIConnectionError
 
 import server.llm.claude_agent as claude_agent
-from server.llm import LLM, LLMError, LLMTimeout
+from server.llm import LLM, LLMBillingRefused, LLMError, LLMTimeout
 from server.llm.claude_agent import (
     ISOLATION_ENV,
     ClaudeAgentLLM,
@@ -345,18 +345,52 @@ def test_session_billed_to_an_api_key_is_refused(llm, fake, source):
     fake.turns = [reply("paid answer", init=init), reply("never")]
     x = llm()
     x.start_session("S")
-    with pytest.raises(LLMError) as e:
+    with pytest.raises(LLMBillingRefused) as e:
         x.complete("a", 2)
-    assert not isinstance(e.value, LLMTimeout)
+    assert isinstance(e.value, LLMError) and not isinstance(e.value, LLMTimeout)
     assert "apiKeySource" in str(e.value) and "paid answer" not in str(e.value)
     client = fake.instances[0]
     assert client.interrupt_calls == 1  # 답을 만들기 시작했더라도 바로 멈추게 한다
     assert _wait_until(lambda: client.closed)  # 세션(claude.exe)을 끝낸다
-    with pytest.raises(LLMError) as again:
+    with pytest.raises(LLMBillingRefused) as again:
         x.complete("b", 2)
     assert "apiKeySource" in str(again.value)
     assert client.queries == ["a"]
+    assert x.refused is not None and "apiKeySource" in x.refused
     assert x.init_info["apiKeySource" if source is not None else "model"] is not None
+
+
+def test_billing_refusal_is_sticky_across_new_sessions(llm, fake, tmp_path):
+    # 페이지를 다시 열 때마다(/api/session/start) 유료 질의가 한 번씩 나가면 안 된다: 거부는 이 객체가 사는 동안 유지된다.
+    fake.turns = [reply("paid", init={**INIT, "apiKeySource": "ANTHROPIC_API_KEY"}), reply("never")]
+    x = llm()
+    assert x.refused is None
+    x.start_session("S1")
+    with pytest.raises(LLMBillingRefused):
+        x.complete("a", 2)
+    first = fake.instances[0]
+    assert _wait_until(lambda: first.closed)
+    (tmp_path / "system_prompt.md").unlink()
+    for prompt in ("S2", "S3"):
+        x.start_session(prompt)  # claude.exe 를 다시 띄우지 않는다
+        assert x.wait_ready(0.2) is False
+        with pytest.raises(LLMBillingRefused) as e:
+            x.complete("b", 2)
+        assert "apiKeySource" in str(e.value)
+    assert len(fake.instances) == 1  # 새 연결 없음
+    assert first.queries == ["a"]  # 거부 뒤로는 질의 0개
+    assert not (tmp_path / "system_prompt.md").exists()  # 작업 폴더도 건드리지 않는다
+
+
+def test_refusal_does_not_leak_into_a_new_instance(llm, fake):
+    fake.turns = [reply("paid", init={**INIT, "apiKeySource": "apiKeyHelper"}), reply("ok")]
+    refused = llm()
+    refused.start_session("S")
+    with pytest.raises(LLMBillingRefused):
+        refused.complete("a", 2)
+    fresh = llm()  # 서버를 다시 켠 것과 같다: 새 객체는 다시 init 으로 판정한다
+    fresh.start_session("S")
+    assert fresh.complete("b", 2).text == "ok" and fresh.refused is None
 
 
 def test_billing_ok_accepts_only_none():

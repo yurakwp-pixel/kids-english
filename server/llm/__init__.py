@@ -5,6 +5,7 @@
 
 규칙:
 - `complete` 는 시간이 넘으면 `LLMTimeout`, 그 밖의 실패는 `LLMError` 를 던진다.
+  API 키 과금 경로라서 거부했으면 `LLMBillingRefused`(LLMError 의 하위 클래스)이고, 그 거부는 객체가 사는 동안 유지된다.
 - 실패해도 놀이는 멈추지 않는다. 호출하는 쪽이 `canned.fallback_reply` 로 대신 답한다.
 """
 from __future__ import annotations
@@ -30,6 +31,13 @@ class LLMTimeout(LLMError):
     """정해진 시간 안에 답이 오지 않았다."""
 
 
+class LLMBillingRefused(LLMError):
+    """API 키로 과금될 수 있는 인증이라 거부했다(사용자 규칙: API 요금 0원, 구독만).
+
+    한 번 거부하면 그 어댑터 객체가 사는 동안 다시 연결하지도, 질의를 보내지도 않는다.
+    """
+
+
 @runtime_checkable
 class LLM(Protocol):
     def start_session(self, system_prompt: str) -> None:
@@ -45,4 +53,4 @@ class LLM(Protocol):
         ...
 
 
-__all__ = ["LLM", "LLMResult", "LLMError", "LLMTimeout"]
+__all__ = ["LLM", "LLMResult", "LLMError", "LLMTimeout", "LLMBillingRefused"]

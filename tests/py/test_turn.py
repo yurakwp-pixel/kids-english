@@ -11,7 +11,7 @@ import jsonschema
 import pytest
 
 import server.turn as turn_module
-from server.llm import LLMError
+from server.llm import LLMBillingRefused, LLMError
 from server.llm.fake import FakeLLM
 from server.prompt_builder import NONE_YET, build_system_prompt, build_turn_message
 from server.session_log import SessionLog
@@ -274,6 +274,18 @@ def test_log_keeps_the_error_kind_not_its_message(tmp_path, error, kind):
     raw = log_path(tmp_path, "s1").read_text(encoding="utf-8")
     assert "Minji" not in raw and "Sunny" not in raw
     assert json.loads(raw.splitlines()[-1])["error"] == kind
+
+
+def test_billing_refusal_prints_a_fixed_line_and_logs_the_class(tmp_path, capsys):
+    refusal = LLMBillingRefused("refused: apiKeySource='ANTHROPIC_API_KEY' (child said Minji)")
+    orch = make_orch(FakeLLM([refusal]), tmp_path); orch.start_session("s1")
+    reply = list(orch.handle(req("s1", 1, ["jump"])))[-1]
+    assert reply["source"] == "fallback" and reply["ops"] == []
+    turn = log_events(tmp_path, "s1")[-1]
+    assert turn["error"] == "LLMBillingRefused"
+    assert "Minji" not in log_path(tmp_path, "s1").read_text(encoding="utf-8")
+    err = capsys.readouterr().err
+    assert "LLM refused: API-key billing" in err and "Minji" not in err
 
 
 def test_log_records_timeout_kind(tmp_path):
