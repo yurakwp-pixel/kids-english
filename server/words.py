@@ -2,7 +2,7 @@
 
 단어장은 코드가 아니라 데이터다. 단어를 더하는 일은 JSON 한 줄을 더하는 일이다(스펙 5.7).
 놀이판에 그릴 수 있는 것(`shared/catalog.json`)과는 따로 두고, 로더가 둘을 맞춰 본다.
-JSON 은 주석을 쓸 수 없어서 모양을 여기에 적는다. 파일 하나는 단어 목록(한 줄에 한 단어)이다.
+JSON 은 주석을 쓸 수 없어서 모양을 여기에 적는다. 파일 하나는 단어 목록(한 줄에 한 단어, UTF-8, 메모장의 BOM 도 된다)이다.
 
     {"id": "kick-the-ball", "en": "Kick the ball", "ko": "공을 차",
      "accept": ["kick the ball", "kick the {object}", "kick"],
@@ -128,8 +128,9 @@ def load_words(dir: Path, catalog: Catalog) -> WordBank:
 
 def _read_entries(path: Path) -> list:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_no_duplicate_keys)
-    except ValueError as exc:  # JSONDecodeError, UnicodeDecodeError 는 ValueError 의 한 갈래다(BOM 도 여기서 걸린다)
+        # utf-8-sig: 부모가 메모장에서 "UTF-8(BOM)" 으로 저장해도 읽는다(BOM 이 없으면 utf-8 과 같다)
+        data = json.loads(path.read_text(encoding="utf-8-sig"), object_pairs_hook=_no_duplicate_keys)
+    except ValueError as exc:  # JSONDecodeError, UnicodeDecodeError 는 ValueError 의 한 갈래다
         raise ValueError(f"{path.name}: {exc}") from exc
     if not isinstance(data, list):
         raise ValueError(f"{path.name}: must be a JSON array of words")

@@ -200,16 +200,15 @@ def test_chomp_only_ever_bites_food(bank, catalog):
             assert catalog.is_food(p["needs"]), w.id
 
 
-def test_word_files_are_plain_utf8_without_bom():
+def test_word_files_are_utf8_with_one_word_per_line():
     files = sorted(WORDS_DIR.glob("*.json"))
     assert [f.name for f in files] == ["level1_actions.json", "level1_social.json", "level2_starter.json"]
     for f in files:
-        data = f.read_bytes()
-        assert not data.startswith(b"\xef\xbb\xbf")
-        entries = json.loads(data.decode("utf-8"))
+        text = f.read_bytes().decode("utf-8-sig")  # 메모장이 붙인 BOM 은 괜찮다(로더도 utf-8-sig 로 읽는다)
+        entries = json.loads(text)
         assert isinstance(entries, list) and entries
         # 한 줄에 한 단어: 단어를 더하는 것이 JSON 한 줄을 더하는 일이다
-        body = [ln for ln in data.decode("utf-8").splitlines() if ln.strip() not in ("[", "]")]
+        body = [ln for ln in text.splitlines() if ln.strip() not in ("", "[", "]")]
         assert len(body) == len(entries)
         assert all(ln.strip().startswith("{") for ln in body)
 
@@ -496,11 +495,11 @@ def test_invalid_json_is_a_value_error_naming_the_file(tmp_path, catalog):
         load_words(tmp_path, catalog)
 
 
-def test_a_utf8_bom_is_rejected(tmp_path, catalog):
-    # 브라우저와 다른 도구가 같은 파일을 읽는다: BOM 없는 UTF-8 만
-    (tmp_path / "w.json").write_bytes(b"\xef\xbb\xbf" + json.dumps([good()]).encode("utf-8"))
-    with pytest.raises(ValueError, match="w.json"):
-        load_words(tmp_path, catalog)
+def test_a_utf8_bom_from_notepad_loads(tmp_path, catalog):
+    # 부모는 Windows 메모장으로 단어장을 고친다. "UTF-8(BOM)" 으로 저장해도 읽는다(단어장은 서버만 읽는다. 브라우저는 안 읽는다)
+    (tmp_path / "w.json").write_bytes(b"\xef\xbb\xbf" + json.dumps([good()], ensure_ascii=False).encode("utf-8"))
+    bank = load_words(tmp_path, catalog)
+    assert [w.id for w in bank.words] == ["x"] and bank.words[0].ko == "뛰어"
 
 
 def test_non_utf8_bytes_are_a_value_error(tmp_path, catalog):
