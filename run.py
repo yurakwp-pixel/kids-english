@@ -2,6 +2,7 @@
 
 `--fake-llm` 이면 돈도 네트워크도 쓰지 않는 FakeLLM 이 준비된 영어 한마디로 답한다(화면 개발용).
 아니면 이 PC 의 Claude Code 구독으로 ClaudeAgentLLM(haiku)을 쓴다.
+어느 쪽이든 `shared/catalog.json`(그릴 수 있는 것)과 `content/words/`(배울 단어)를 읽어 fastpath·부화·검증기에 쓴다.
 """
 import json
 import os
@@ -10,14 +11,18 @@ from pathlib import Path
 
 from server.app import make_server
 from server.canned import fallback_reply, praise
+from server.catalog import load_catalog
 from server.config import Config, load_config, scrub_llm_env
 from server.llm.claude_agent import ClaudeAgentLLM
 from server.llm.fake import FakeLLM
 from server.session_log import SessionLog
 from server.turn import TurnOrchestrator
+from server.words import load_words
 
 ROOT = Path(__file__).resolve().parent
 PROMPT_FILE = Path("prompts") / "chomp_system.md"
+CATALOG_FILE = Path("shared") / "catalog.json"
+WORDS_DIR = Path("content") / "words"
 SESSIONS_DIR = Path("data") / "sessions"
 
 
@@ -39,12 +44,19 @@ def fake_llm_script() -> list[str]:
 
 
 def build_orchestrator(cfg: Config) -> TurnOrchestrator:
+    """카탈로그와 단어장을 읽어(틀렸으면 어느 파일의 무엇인지 담은 ValueError 로 서버가 뜨지 않는다) 턴 처리기를 만든다.
+
+    `--fake-llm` 이어도 fastpath·부화·검증기는 진짜와 똑같이 돈다. 바뀌는 것은 LLM 의 답뿐이다.
+    """
     if cfg.use_fake_llm:
         llm = FakeLLM(fake_llm_script())
     else:  # 작업 폴더는 기본값(default_workdir). bench_llm.py 는 다른 폴더를 쓴다.
         llm = ClaudeAgentLLM(cfg.model, oauth_token=cfg.oauth_token)
     template = (cfg.root / PROMPT_FILE).read_text(encoding="utf-8")
-    return TurnOrchestrator(llm, SessionLog(cfg.root / SESSIONS_DIR), template, timeout_s=cfg.llm_timeout_s)
+    catalog = load_catalog(cfg.root / CATALOG_FILE)
+    bank = load_words(cfg.root / WORDS_DIR, catalog)
+    return TurnOrchestrator(llm, SessionLog(cfg.root / SESSIONS_DIR), template, bank=bank, catalog=catalog,
+                            timeout_s=cfg.llm_timeout_s)
 
 
 def main(argv: list[str]) -> int:

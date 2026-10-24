@@ -55,18 +55,32 @@ def turn_url(make_base_url):
 # ---------------------------------------------------------------- brief
 
 
+HATCH = {"op": "act", "actor": "dino", "action": "hatch"}
+
+
 def test_turn_streams_exactly_two_ndjson_lines(turn_url):
     status, _, body = post(turn_url + "/api/session/start", {"session_id": "2026-10-22_1905"})
     assert status == 200 and json.loads(body) == {"ok": True}
-    status, headers, body = post(turn_url + "/api/turn", turn_req("2026-10-22_1905", 1, ["hello chomp"]))
+    status, headers, body = post(turn_url + "/api/turn", turn_req("2026-10-22_1905", 1, ["i like you"]))
     assert status == 200 and headers["Content-Type"] == "application/x-ndjson"
     assert body.endswith(b"\n") and body.isascii()
     lines = body.decode("ascii").splitlines()
     assert len(lines) == 2
-    ack, reply = (json.loads(line) for line in lines)
-    assert ack == {"kind": "ack", "turn_id": 1}
+    first, reply = (json.loads(line) for line in lines)
+    # 세션의 첫 영어: fastpath 에 없는 말이어도 1줄에 부화가 실린다(M2)
+    assert first == {"kind": "fast", "turn_id": 1, "ops": [HATCH], "sfx": "pop"}
     assert reply["kind"] == "reply" and reply["turn_id"] == 1 and reply["source"] == "llm"
     assert reply["say"] == json.loads(fake_llm_script()[0])["say"]
+    _, _, body = post(turn_url + "/api/turn", turn_req("2026-10-22_1905", 2, ["i like you"]))
+    assert json.loads(body.splitlines()[0]) == {"kind": "ack", "turn_id": 2}  # 부화는 한 번만
+
+
+def test_known_words_take_the_fastpath_without_the_llm(turn_url, project_root):
+    lines = [json.loads(line) for line in post(turn_url + "/api/turn", turn_req("s1", 1, ["jump"]))[2].splitlines()]
+    assert lines[0] == {"kind": "fast", "turn_id": 1, "sfx": "pop",
+                        "ops": [HATCH, {"op": "act", "actor": "chomp", "action": "jump"}]}
+    assert lines[1]["source"] == "template" and lines[1]["korean_hint"] == "뛰어 → Jump!"
+    assert lines[1]["latency"]["llm_ms"] is None and lines[1]["ops"] == []
 
 
 def test_ack_is_flushed_before_the_llm_answers(make_base_url):
@@ -211,6 +225,15 @@ def test_build_orchestrator_picks_the_llm(project_root):
     # 진짜 세션은 열지 않는다(쿼터 0). 서버는 기본 작업 폴더를 쓴다(bench 와 다른 폴더).
     assert isinstance(real.llm, ClaudeAgentLLM) and real.llm.workdir == default_workdir()
     assert real.llm.model == "haiku"
+
+
+def test_build_orchestrator_loads_the_words_and_the_catalog(project_root):
+    orch = build_orchestrator(load_config(project_root, ["--fake-llm"], environ={}))
+    assert orch.catalog is not None and "hatch" in orch.catalog.actor_actions("dino")
+    assert orch.bank is not None and orch.level == 2
+    prompt = orch.system_prompt()
+    assert "Kick the ball | 공을 차" in prompt and "egg: color, size" in prompt
+    assert "{VOCAB}" not in prompt and "{CATALOG}" not in prompt
 
 
 def test_main_serves_and_closes(project_root, monkeypatch, capsys):

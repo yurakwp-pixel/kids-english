@@ -12,14 +12,18 @@ REAL_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def project_root(tmp_path):
-    """임시 프로젝트 루트: 진짜 web/, prompts/ 사본 + 비어 있는 docs/, shared/ + 노출되면 안 되는 .env, run.py.
+    """임시 프로젝트 루트: 진짜 web/, prompts/, content/ 사본과 shared/catalog.json + 비어 있는 docs/
+    + 노출되면 안 되는 .env, run.py.
 
     테스트가 진짜 docs/, data/ 폴더에 파일을 남기지 않도록 모든 서버 테스트는 이 루트에서 돈다.
+    run.py 의 build_orchestrator 가 카탈로그와 단어장을 이 루트에서 읽는다.
     """
     shutil.copytree(REAL_ROOT / "web", tmp_path / "web")
     shutil.copytree(REAL_ROOT / "prompts", tmp_path / "prompts")
+    shutil.copytree(REAL_ROOT / "content", tmp_path / "content")
     (tmp_path / "docs").mkdir()
     (tmp_path / "shared").mkdir()
+    shutil.copy(REAL_ROOT / "shared" / "catalog.json", tmp_path / "shared" / "catalog.json")
     (tmp_path / ".env").write_text("CLAUDE_CODE_OAUTH_TOKEN=do-not-serve\n", encoding="utf-8")
     (tmp_path / "run.py").write_text("print('do-not-serve')\n", encoding="utf-8")
     return tmp_path
