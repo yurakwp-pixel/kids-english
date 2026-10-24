@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "turn_reply",
+  "description": "서버가 아이 화면으로 내보내는 답 하나(스펙 5.5). server/reply.py 의 validate_reply 가 만든 결과는 언제나 이 스키마를 만족한다. 한글은 korean_hint 에만 쓸 수 있다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["say", "recast", "choice", "korean_hint", "ops", "mood", "utterance"],
+  "properties": {
+    "say": { "$ref": "#/$defs/englishText" },
+    "recast": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model", "ask_repeat"],
+          "properties": {
+            "model": { "$ref": "#/$defs/englishText" },
+            "ask_repeat": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "choice": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/englishText" }
+        }
+      ]
+    },
+    "korean_hint": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 150,
+          "not": { "pattern": "<|[A-Za-z][A-Za-z0-9+.-]*://|www\\." }
+        }
+      ]
+    },
+    "ops": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["op"],
+        "properties": {
+          "op": { "enum": ["add", "set", "move", "remove", "act"] }
+        }
+      }
+    },
+    "mood": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actor", "face"],
+          "properties": {
+            "actor": { "enum": ["chomp", "dino"] },
+            "face": { "type": "string", "pattern": "^[a-z][a-z-]{0,19}$" }
+          }
+        }
+      ]
+    },
+    "utterance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lang", "words_used", "errors"],
+      "properties": {
+        "lang": { "enum": ["en", "ko", "mixed", "unknown"] },
+        "words_used": { "type": "array", "items": { "type": "string" } },
+        "errors": { "type": "array", "items": { "type": "object" } }
+      }
+    }
+  },
+  "$defs": {
+    "englishText": {
+      "description": "아이에게 보여 주고 읽어 주는 영어 한마디: 15단어 이하(공백 하나로 정리됨), 한글 금지, '<' 금지, URL 금지.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^\\S+(?: \\S+){0,14}$",
+      "not": {
+        "pattern": "[\\u1100-\\u11ff\\u3130-\\u318f\\ua960-\\ua97f\\uac00-\\ud7ff\\uffa0-\\uffdc]|<|[A-Za-z][A-Za-z0-9+.-]*://|www\\."
+      }
+    }
+  }
+}
