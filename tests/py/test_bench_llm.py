@@ -32,3 +32,13 @@ def test_fill_prompt_replaces_both_placeholders():
 def test_turn_message_matches_the_task6_shape():
     msg = json.loads(turn_message("빨간 알"))
     assert msg == {"heard": ["빨간 알"], "scene": [], "applied_ops": [], "hint_requested": False}
+
+
+def test_bench_uses_its_own_workdir():
+    # 서버가 쓰는 작업 폴더의 system_prompt.md 를 bench 가 덮어쓰지 않게 폴더를 나눈다.
+    from scripts.bench_llm import bench_workdir
+    from server.llm.claude_agent import default_workdir
+
+    path = bench_workdir()
+    assert path != default_workdir() and path.parent == default_workdir().parent
+    assert path.name == "kids_english_llm_bench" and str(path).isascii()

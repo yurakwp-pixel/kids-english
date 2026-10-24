@@ -13,6 +13,9 @@
 격리 (반목표 A4): `build_options` 가 기본 프롬프트, 도구, MCP, 사용자 설정(출력 스타일·CLAUDE.md·훅·스킬·플러그인),
 대화 기록 저장을 모두 끈다. 실제로 꺼졌는지는 세션 시작 정보(`init_info`)를 `check_isolation` 으로 확인한다.
 서버 프로세스 환경에서 물려받으면 안 되는 변수는 `server.config.scrub_llm_env` 가 시작할 때 지운다.
+
+요금 (사용자 규칙 "API 요금 0원"): init 의 `apiKeySource` 가 "none" 이 아니면 `billing_ok` 가 거부하고, 액터가 그 턴을
+interrupt 한 뒤 세션을 끝낸다. 그 뒤 `complete()` 는 모두 `LLMError` 다(놀이는 준비된 대사로 이어진다).
 """
 from __future__ import annotations
 
@@ -138,6 +141,22 @@ def isolation_ok(checks: list[IsolationCheck]) -> bool:
     return all(c.ok for c in checks)
 
 
+# --- 요금 지킴이 ------------------------------------------------------------------------------
+# 사용자의 절대 규칙: API 요금 0원, 구독만 쓴다. init 의 apiKeySource 는 자격증명이 어디서 왔는지 알려 준다
+# ("none" = API 키 없음, 구독 로그인/OAuth 토큰). 그 밖의 값("ANTHROPIC_API_KEY", "apiKeyHelper",
+# "/login managed key")이거나 값이 없으면 API 키로 과금될 수 있으니 세션을 거부한다(모르면 막는다).
+# init 은 턴의 응답 맨 앞에 오므로 첫 턴의 요청은 이미 나간 뒤다. 그래서 보자마자 interrupt 로 답 생성을 멈춘다.
+
+def billing_ok(init_info: dict | None) -> bool:
+    """세션 시작 정보가 구독 인증(apiKeySource == "none")을 가리키면 True."""
+    return isinstance(init_info, dict) and init_info.get("apiKeySource") == "none"
+
+
+def _billing_refusal(init_info: dict) -> str:
+    source = str(init_info.get("apiKeySource", "(missing)"))[:40]  # 출처 이름일 뿐 비밀 값이 아니다
+    return f"refused: apiKeySource={source!r} could bill an API key (subscription only)"
+
+
 # --- 액터 -------------------------------------------------------------------------------------
 
 _STOP = object()
@@ -152,6 +171,10 @@ class _Turn:
 
 class _TurnFailed(Exception):
     """이 턴만 실패했다(예: API 오류 결과). 세션은 계속 쓸 수 있다."""
+
+
+class _SessionRefused(Exception):
+    """이 세션을 더 쓰면 안 된다(예: API 키 과금 경로). 액터가 세션을 끝낸다."""
 
 
 def _settle(future: asyncio.Future, *, result: Any = None, error: BaseException | None = None) -> None:
@@ -230,6 +253,10 @@ class _Session:
                     self.current = turn
                     try:
                         text, model = await self._run_turn(client, turn.message)
+                    except _SessionRefused as e:
+                        self.failure = str(e)  # 먼저 적어 둔다: 부른 쪽이 다음 complete 에서 바로 거부를 본다
+                        _settle(turn.future, error=LLMError(str(e)))
+                        break  # async with 를 빠져나가 claude.exe 를 닫는다
                     except _TurnFailed as e:
                         _settle(turn.future, error=LLMError(str(e)))
                     except Exception as e:
@@ -257,16 +284,24 @@ class _Session:
         model: str | None = None
         assistant_error: str | None = None
         result: ResultMessage | None = None
+        refusal: str | None = None
         async for m in client.receive_response():  # ResultMessage 를 내고 스스로 끝난다. break 금지.
             if isinstance(m, SystemMessage):
-                if m.subtype == "init" and self.init_info is None:
-                    self.init_info = dict(m.data)
+                if m.subtype == "init":
+                    data = dict(m.data)
+                    if self.init_info is None:
+                        self.init_info = data
+                    if refusal is None and not billing_ok(data):  # 턴마다 오는 init 을 모두 본다
+                        refusal = _billing_refusal(data)
+                        await self._interrupt(client)  # 답 생성을 바로 멈추고, 끝(ResultMessage)까지는 읽는다
             elif isinstance(m, AssistantMessage):
                 model = m.model or model
                 assistant_error = m.error or assistant_error
                 parts.extend(b.text for b in m.content if isinstance(b, TextBlock))
             elif isinstance(m, ResultMessage):
                 result = m
+        if refusal is not None:
+            raise _SessionRefused(refusal)
         if result is None:
             raise LLMError("claude stream ended without a result")
         if result.is_error:
@@ -283,10 +318,13 @@ class _Session:
     async def abandon(self, turn: _Turn) -> None:
         turn.abandoned = True
         if self.current is turn and self.client is not None:
-            try:
-                await self.client.interrupt()
-            except Exception as e:  # 인터럽트가 실패해도 턴은 언젠가 끝난다. 기록만 남긴다.
-                self.stderr_tail.append(f"[kids-english] interrupt failed: {type(e).__name__}: {e}")
+            await self._interrupt(self.client)
+
+    async def _interrupt(self, client: Any) -> None:
+        try:
+            await client.interrupt()
+        except Exception as e:  # 인터럽트가 실패해도 턴은 언젠가 끝난다. 기록만 남긴다.
+            self.stderr_tail.append(f"[kids-english] interrupt failed: {type(e).__name__}: {e}")
 
     async def shutdown(self) -> None:
         if self.current is not None:  # 진행 중인 턴은 interrupt 로 빨리 끝내게 한다(기다리지 않음)
@@ -380,6 +418,7 @@ __all__ = [
     "ISOLATION_ENV",
     "ClaudeAgentLLM",
     "IsolationCheck",
+    "billing_ok",
     "build_options",
     "check_isolation",
     "default_workdir",

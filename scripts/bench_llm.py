@@ -27,6 +27,7 @@ from server.llm.claude_agent import (  # noqa: E402
     ClaudeAgentLLM,
     build_options,
     check_isolation,
+    default_workdir,
     isolation_ok,
 )
 
@@ -41,6 +42,12 @@ INPUTS: list[str] = [
     "i like dinosaurs", "공 차", "two blue balls", "stretch your arms", "where is the egg",
     "spin", "yawn", "let's dance", "give me five", "good night",
 ]
+
+
+def bench_workdir() -> Path:
+    """서버(`default_workdir()`)와 다른 빈 폴더. 서버가 떠 있을 때 bench 를 돌려도 서버 세션의 system_prompt.md 를
+    바꿔치기하지 않는다. 서버 폴더와 같은 곳(ASCII 임시 폴더)에 이름만 다르게 둔다."""
+    return default_workdir().parent / "kids_english_llm_bench"
 
 
 def fill_prompt(template: str) -> str:
@@ -116,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     removed = scrub_llm_env(os.environ)  # run.py 와 똑같이
     print(f"env removed (names only): {', '.join(sorted(removed)) or '(none)'}")
     cfg = load_config(ROOT, [])
-    llm = ClaudeAgentLLM(args.model, oauth_token=cfg.oauth_token)
+    llm = ClaudeAgentLLM(args.model, workdir=bench_workdir(), oauth_token=cfg.oauth_token)
     _print_options(llm, cfg.oauth_token is not None)
 
     started = time.perf_counter()

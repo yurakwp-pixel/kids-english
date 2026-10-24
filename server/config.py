@@ -13,6 +13,8 @@ from typing import Mapping, MutableMapping
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8771
+# 서버는 이 PC 안에서만 열린다(스펙 3절 "127.0.0.1 에만"). --host 는 이 셋 중 하나만 받는다.
+LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "::1")
 OAUTH_TOKEN_KEY = "CLAUDE_CODE_OAUTH_TOKEN"
 API_KEY_KEY = "ANTHROPIC_API_KEY"
 
@@ -81,9 +83,19 @@ def _read_dotenv(root: Path) -> dict[str, str]:
     return parse_dotenv(path.read_text(encoding="utf-8-sig"))
 
 
+def _loopback_host(value: str) -> str:
+    host = value.strip().lower()
+    if host not in LOOPBACK_HOSTS:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a loopback address; this server only listens on this PC "
+            f"({', '.join(LOOPBACK_HOSTS)})")
+    return host
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="run.py", description="kids-english 로컬 서버")
-    parser.add_argument("--host", default=DEFAULT_HOST, help=f"바인딩 주소 (기본 {DEFAULT_HOST})")
+    parser.add_argument("--host", default=DEFAULT_HOST, type=_loopback_host,
+                        help=f"바인딩 주소: {', '.join(LOOPBACK_HOSTS)} 중 하나 (기본 {DEFAULT_HOST})")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"포트 (기본 {DEFAULT_PORT})")
     parser.add_argument("--fake-llm", action="store_true", help="Claude 대신 FakeLLM 을 쓴다")
     return parser
@@ -94,7 +106,10 @@ def load_config(
     argv: list[str] | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> Config:
-    """root/.env 와 environ 과 argv 를 합쳐 Config 를 만든다. argv 가 None 이면 플래그가 없는 것으로 본다."""
+    """root/.env 와 environ 과 argv 를 합쳐 Config 를 만든다. argv 가 None 이면 플래그가 없는 것으로 본다.
+
+    잘못된 플래그(예: 루프백이 아닌 --host)는 argparse 가 오류 문장을 stderr 에 쓰고 SystemExit(2) 로 끝낸다.
+    """
     args = _build_parser().parse_args([] if argv is None else argv)
     merged = {**_read_dotenv(root), **(os.environ if environ is None else environ)}
     return Config(

@@ -1,5 +1,6 @@
 import json
 import socket
+import threading
 from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import urlopen
@@ -40,6 +41,11 @@ def test_static_files_have_utf8_content_types(base_url, path, content_type):
     "/docs/../.env",
     "/%2e%2e/.env",
     "/shared/..%2f..%2frun.py",
+    # `..` 한 번으로 매핑 폴더 바로 위(프로젝트 루트)를 가리킨다: 루트에는 .env 와 run.py 가 진짜로 있어서
+    # resolve_static 의 폴더 안 검사가 없으면 200 이 된다(위 벡터들은 다른 이유로도 404 가 될 수 있다).
+    "/docs/..%2f.env",
+    "/docs/%2e%2e/.env",
+    "/shared/..%2frun.py",
     "/js/../../run.py",
     "/js/..%5c..%5crun.py",
     "/docs/%2e%2e/%2e%2e/run.py",
@@ -111,6 +117,20 @@ def test_resolve_static_stays_inside_the_mapped_folder(project_root):
 
 def test_server_binds_loopback_only_by_default(base_url):
     assert base_url.startswith("http://127.0.0.1:")
+
+
+@pytest.mark.skipif(not socket.has_ipv6, reason="no IPv6 on this machine")
+def test_ipv6_loopback_host_serves(project_root):
+    # load_config 가 허용하는 "::1" 은 실제로 열려야 한다(IPv4 소켓으로 열면 주소 오류가 난다).
+    cfg = load_config(project_root, ["--host", "::1", "--port", "0", "--fake-llm"], environ={})
+    server = make_server(cfg, None)
+    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
+    try:
+        port = server.server_address[1]
+        assert get_json(f"http://[::1]:{port}/api/health")["ok"] is True
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_second_server_cannot_share_a_busy_port(base_url, project_root):

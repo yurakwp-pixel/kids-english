@@ -1,3 +1,5 @@
+import pytest
+
 from server.config import Config, load_config, parse_dotenv, scrub_api_key_env, scrub_llm_env
 
 
@@ -70,8 +72,20 @@ def test_load_config_defaults_without_dotenv_or_flags(tmp_path):
     assert (cfg.host, cfg.port, cfg.llm_timeout_s, cfg.use_fake_llm) == ("127.0.0.1", 8771, 8.0, False)
 
 
-def test_load_config_host_flag(tmp_path):
-    assert load_config(tmp_path, ["--host", "0.0.0.0"], environ={}).host == "0.0.0.0"
+@pytest.mark.parametrize("host, expected", [
+    ("127.0.0.1", "127.0.0.1"), ("localhost", "localhost"), ("::1", "::1"), ("LOCALHOST", "localhost"),
+])
+def test_load_config_host_flag_accepts_loopback(tmp_path, host, expected):
+    assert load_config(tmp_path, ["--host", host], environ={}).host == expected
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.168.0.10", "127.0.0.2", "example.com", ""])
+def test_load_config_rejects_non_loopback_host(tmp_path, capsys, host):
+    # 서버는 이 PC 안(127.0.0.1)에서만 열린다. 집 안 다른 기기로 여는 것은 나중 마일스톤에서 따로 정한다.
+    with pytest.raises(SystemExit) as e:
+        load_config(tmp_path, ["--host", host], environ={})
+    assert e.value.code == 2
+    assert "loopback" in capsys.readouterr().err
 
 
 def test_environ_token_wins_over_dotenv(tmp_path):

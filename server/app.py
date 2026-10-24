@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import socket
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
@@ -109,6 +110,8 @@ class AppServer(ThreadingHTTPServer):
     def __init__(self, cfg: Config, orchestrator: object | None) -> None:
         self.cfg = cfg
         self.orchestrator = orchestrator
+        # "::1" 은 IPv6 소켓이어야 열린다(기본 IPv4 소켓이면 주소 오류). 소켓은 super().__init__ 가 만든다.
+        self.address_family = socket.AF_INET6 if ":" in cfg.host else socket.AF_INET
         super().__init__((cfg.host, cfg.port), _Handler)
 
 

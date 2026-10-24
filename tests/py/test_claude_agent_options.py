@@ -84,7 +84,7 @@ def test_build_options_does_not_share_env_dict_between_calls(tmp_path):
 # --- 가짜 ClaudeSDKClient ---------------------------------------------------------------------
 
 INIT = {"type": "system", "subtype": "init", "tools": [], "mcp_servers": [], "plugins": [],
-        "model": "claude-haiku-test", "output_style": "default"}
+        "model": "claude-haiku-test", "output_style": "default", "apiKeySource": "none"}
 
 
 def _result(is_error=False, terminal_reason="completed"):
@@ -335,6 +335,34 @@ def test_start_session_again_replaces_the_old_client(llm, fake):
     assert x.complete("b", 2).text == "two"
     assert len(fake.instances) == 2 and fake.instances[0].closed and not fake.instances[1].closed
     assert x.init_info == INIT
+
+
+@pytest.mark.parametrize("source", ["ANTHROPIC_API_KEY", "apiKeyHelper", "/login managed key", "", None])
+def test_session_billed_to_an_api_key_is_refused(llm, fake, source):
+    # 사용자의 절대 규칙: API 요금 0원(구독만). init 의 apiKeySource 가 "none" 이 아니면(없어도) 세션을 거부한다.
+    init = {**INIT, "apiKeySource": source} if source is not None else {
+        k: v for k, v in INIT.items() if k != "apiKeySource"}
+    fake.turns = [reply("paid answer", init=init), reply("never")]
+    x = llm()
+    x.start_session("S")
+    with pytest.raises(LLMError) as e:
+        x.complete("a", 2)
+    assert not isinstance(e.value, LLMTimeout)
+    assert "apiKeySource" in str(e.value) and "paid answer" not in str(e.value)
+    client = fake.instances[0]
+    assert client.interrupt_calls == 1  # 답을 만들기 시작했더라도 바로 멈추게 한다
+    assert _wait_until(lambda: client.closed)  # 세션(claude.exe)을 끝낸다
+    with pytest.raises(LLMError) as again:
+        x.complete("b", 2)
+    assert "apiKeySource" in str(again.value)
+    assert client.queries == ["a"]
+    assert x.init_info["apiKeySource" if source is not None else "model"] is not None
+
+
+def test_billing_ok_accepts_only_none():
+    assert claude_agent.billing_ok({"apiKeySource": "none"})
+    for bad in [{"apiKeySource": "ANTHROPIC_API_KEY"}, {"apiKeySource": None}, {}, None]:
+        assert not claude_agent.billing_ok(bad)
 
 
 def test_repr_never_shows_the_token(tmp_path):
