@@ -11,6 +11,9 @@
      - 세션의 첫 영어 한마디 → `HATCH_OP` 를 ops 맨 앞에 넣는다(세션 상태 hatched). 부화는 `egg1`(처음 화면의 둥지 속 알)을
        없애므로 이 턴의 fastpath·LLM 은 egg1 이 없는 장면을 본다. 어떤 op 도 egg1 을 가리키지 않고, egg1 이라는 id 를 이 턴에
        새 물건에 다시 주지도 않는다(지운 id 를 같은 턴에 되살리면 화면이 같은 물건으로 착각한다).
+       장면의 dino 가 `"hatched": true` 면(화면이 이미 부화했다) 서버 기억과 상관없이 부화하지 않고, 이 세션은 부화한 것으로
+       기억한다. 서버를 다시 켜도(새 세션) 열린 화면에 hatch 를 또 보내지 않는다: 부화 뒤 새 알은 다시 egg1 을 받을 수 있어서
+       (`server/ids.py`), 그 알을 둥지 알로 보고 지우면 아이의 알을 대상에서 빼 버린다. 화면의 false 는 서버 기억을 지우지 않는다.
      - 단어장과 카탈로그가 있으면 fastpath(`server/fastpath.py`).
      1줄 = ops 가 있으면 `{"kind":"fast","turn_id":N,"ops":[...],"sfx":"pop"}`, 없으면 `{"kind":"ack","turn_id":N}`.
   4. 지금 세션이 아닌 session_id 면 그 세션을 연다(implicit start). 서버가 다시 켜져도 열려 있던 아이 화면의 다음 턴이
@@ -81,6 +84,7 @@ class _Turn:
     scene: list[dict]
     hint_requested: bool
     korean: bool = False  # 군소리를 뺀 첫 후보에 한글이 있다(가리기 전에 정한다)
+    hatched: bool = False  # 장면의 dino 가 "hatched": true(화면이 이미 부화했다, web/js/scene/model.js toWire)
 
     def as_request(self, scene: list[dict] | None = None) -> dict:
         """`build_turn_message` 가 읽는 턴 요청 모양(정리된 값만). scene 을 주면 그 장면을 보여 준다."""
@@ -150,7 +154,8 @@ def parse_turn_request(req: object) -> _Turn:
 
     scene = req.get("scene")
     items = [item for item in scene if isinstance(item, dict)][:MAX_SCENE_ITEMS] if isinstance(scene, list) else []
-    return _Turn(session_id, turn_id, heard, items, req.get("hint_requested") is True, korean)
+    hatched = any(item.get("id") == "dino" and item.get("hatched") is True for item in items)
+    return _Turn(session_id, turn_id, heard, items, req.get("hint_requested") is True, korean, hatched)
 
 
 def _ms_since(started: float) -> int:
@@ -252,12 +257,13 @@ class TurnOrchestrator:
         turn = parse_turn_request(req)
         with self._lock:
             new_session = turn.session_id != self._session_id
-            plan = self._plan(turn, hatched=self._hatched and not new_session)
+            # 화면이 "이미 깨어났다"고 하면 믿는다(서버를 다시 켠 뒤). 서버 기억은 같은 세션 안에서만 쓴다.
+            plan = self._plan(turn, hatched=turn.hatched or (self._hatched and not new_session))
             yield plan.first_line(turn.turn_id)
             # 여기부터는 1줄이 나간 뒤다(쓰기에 실패하면 app 이 close 해서 여기에 오지 않는다)
             if new_session:
                 self._start(turn.session_id, implicit=True)
-            if plan.hatch:
+            if plan.hatch or turn.hatched:
                 self._hatched = True
             answer = self._answer(turn, plan)
             self._turns += 1

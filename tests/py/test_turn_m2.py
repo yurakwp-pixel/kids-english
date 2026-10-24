@@ -261,6 +261,53 @@ def test_a_new_session_hatches_again(tmp_path):
     assert turn(orch, "c", 2, ["jump"])[0]["ops"] == [{"op": "act", "actor": "chomp", "action": "jump"}]
 
 
+# ---------------------------------------------------------------- 서버를 다시 켠 뒤: 화면은 이미 부화했다
+
+# 열려 있던 아이 화면(toWire). 부화로 둥지 알 egg1 이 없어진 뒤 "red egg" 가 새 알에 egg1 을 다시 주었다(next_ids).
+RESTARTED_SCENE = [
+    {"id": "chomp", "kind": "chomp", "state": "idle", "face": "happy"},
+    {"id": "dino", "kind": "dino", "state": "idle", "face": "happy", "hatched": True},
+    {"id": "nest1", "kind": "nest", "place": {"zone": "left"}},
+    {"id": "egg1", "kind": "egg", "color": "red"},
+]
+
+
+@pytest.mark.parametrize("said, ops", [
+    (["kick the egg"], [{"op": "act", "actor": "dino", "action": "kick", "target": "egg1"}]),
+    (["throw out the egg"], [{"op": "act", "actor": "dino", "action": "throw_out"}, {"op": "remove", "target": "egg1"}]),
+])
+def test_restart_with_a_hatched_scene_keeps_egg1_targetable_by_the_fastpath(tmp_path, said, ops):
+    orch, llm = make_m2(tmp_path)  # 새로 켠 서버: 이 세션을 모른다(implicit start)
+    first, reply = turn(orch, "s", 5, said, RESTARTED_SCENE)
+    assert first == {"kind": "fast", "turn_id": 5, "ops": ops, "sfx": "pop"}  # hatch 가 없다
+    assert reply["source"] == "template" and llm.calls == []
+
+
+def test_restart_with_a_hatched_scene_keeps_egg1_targetable_by_the_validator(tmp_path):
+    kick = {"op": "act", "actor": "dino", "action": "kick", "target": "egg1"}
+    orch, llm = make_m2(tmp_path, [reply_json(say="Kick! Good job!", ops=[kick])])
+    first, reply = turn(orch, "s", 5, ["dino please kick it"], RESTARTED_SCENE)
+    assert first == {"kind": "ack", "turn_id": 5}
+    sent = json.loads(llm.calls[0])
+    assert sent["applied_ops"] == [] and "egg1" in [item["id"] for item in sent["scene"]]
+    assert reply["source"] == "llm" and reply["ops"] == [kick]
+
+
+def test_the_pages_hatched_flag_is_remembered_for_the_session(tmp_path):
+    orch, _ = make_m2(tmp_path)
+    turn(orch, "s", 5, ["빨간 알"], RESTARTED_SCENE)  # 한국어 턴이어도 화면이 알려 준 부화는 기억한다
+    first, _ = turn(orch, "s", 6, ["jump"], HATCHED_SCENE)  # 이번 장면에는 hatched 표시가 없다
+    assert first["ops"] == [{"op": "act", "actor": "chomp", "action": "jump"}]
+
+
+def test_a_page_that_says_not_hatched_still_hatches(tmp_path):
+    scene = [{**item, "hatched": False} if item["id"] == "dino" else item for item in START_SCENE]
+    orch, _ = make_m2(tmp_path)
+    assert turn(orch, "s", 1, ["jump"], scene)[0]["ops"][0] == HATCH
+    weird = [{**item, "hatched": "true"} if item["id"] == "dino" else item for item in START_SCENE]
+    assert turn(orch, "t", 1, ["jump"], weird)[0]["ops"][0] == HATCH  # true(불리언)만 깨어난 것이다
+
+
 # ---------------------------------------------------------------- 4·7. partial → LLM, 되풀이 없음
 
 
@@ -502,6 +549,16 @@ def test_prompt_names_the_only_answers_that_ask_the_child_to_speak():
     assert "Do not tell the child what to do or say next" in TEMPLATE
     assert ('Only three answers may ask the child to say something: the recast with "Your turn!", '
             'the Korean case with "Say: ...", and the choice question below.') in TEMPLATE
+
+
+def test_prompt_names_the_hatch_turn_exception_to_the_scene_rule(tmp_path):
+    # 부화 턴의 scene 에는 이미 알이 없다(턴 메시지가 그렇게 보낸다). 프롬프트의 "BEFORE" 규칙도 이 예외를 말한다.
+    assert ('One exception: when "applied_ops" starts with the hatch, the egg is already gone from "scene".'
+            in TEMPLATE)
+    orch, llm = make_m2(tmp_path, [reply_json(say="Baby Dino is here!")])
+    turn(orch, "s", 1, ["i like dinosaurs"])
+    sent = json.loads(llm.calls[0])
+    assert sent["applied_ops"][0] == HATCH and "egg1" not in [item.get("id") for item in sent["scene"]]
 
 
 def test_prompt_states_the_id_rules_the_validator_uses():

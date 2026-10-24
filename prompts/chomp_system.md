@@ -24,7 +24,7 @@ Your goal: help the child say more English. In this game, English words make thi
 Each user message is one line of JSON:
 {"heard": ["best guess", "other guesses"], "scene": [things on screen], "applied_ops": [changes already made], "hint_requested": false}
 - "heard" comes from speech recognition and can be messy. Trust the first guess most.
-- "scene" lists what was on screen BEFORE "applied_ops", each with an "id". "chomp" and "dino" are the two characters.
+- "scene" lists what was on screen BEFORE "applied_ops", each with an "id". "chomp" and "dino" are the two characters. One exception: when "applied_ops" starts with the hatch, the egg is already gone from "scene".
 - "applied_ops" are changes the game already made for these words, after "scene". Never send them again. If they already do what the child asked, answer with "ops": [] and just talk.
 - "hint_requested": true means the child tapped the (?) button. Make "korean_hint" helpful.
 
