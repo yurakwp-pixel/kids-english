@@ -1,6 +1,8 @@
 """HTTP: /api/session/start, /api/turn(NDJSON 두 줄), /api/session/end. 서버는 FakeLLM 으로 뜬다(쿼터 0)."""
 import http.client
 import json
+import socket
+import struct
 import time
 from pathlib import Path
 from urllib.error import HTTPError
@@ -103,6 +105,45 @@ def test_ack_is_flushed_before_the_llm_answers(make_base_url):
         conn.close()
     assert json.loads(first)["kind"] == "ack" and json.loads(second)["kind"] == "reply"
     assert second_at >= 0.6 and first_at < second_at - 0.3  # 첫 줄은 LLM 을 기다리지 않고 나간다
+
+
+def test_a_client_that_leaves_mid_turn_does_not_keep_the_turn_lock(make_base_url):
+    # 아이 화면이 1줄만 읽고 연결을 끊었다(새로고침, 탭 닫기). 서버의 그 턴이 끝나면 잠금이 풀려서 다음 턴이 두 줄로 나가야 한다.
+    made = {}
+
+    def slow(cfg):
+        llm = FakeLLM(['{"say":"Slow hi!"}'], delay_s=0.3)
+        made["orch"] = TurnOrchestrator(llm, SessionLog(cfg.root / "data" / "sessions"), TEMPLATE)
+        made["llm"] = llm
+        return made["orch"]
+
+    url = make_base_url([], orchestrator_factory=slow)
+    parts = urlsplit(url)
+    body = json.dumps(turn_req("s1", 1, ["hello"])).encode("utf-8")
+    with socket.create_connection((parts.hostname, parts.port), timeout=5) as sock:
+        sock.sendall(b"POST /api/turn HTTP/1.1\r\nHost: test\r\nContent-Type: application/json\r\n"
+                     b"Content-Length: %d\r\n\r\n" % len(body) + body)
+        reader = sock.makefile("rb")
+        assert reader.readline().split()[1] == b"200"
+        while reader.readline() not in (b"\r\n", b""):  # 헤더
+            pass
+        first = json.loads(reader.readline())
+        reader.close()
+        # LLM 이 답하는 중에 끊는다. linger 0: 닫을 때 RST 를 보내서 서버의 reply 쓰기가 실패하게 한다
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    assert first == {"kind": "ack", "turn_id": 1}
+
+    orch, llm = made["orch"], made["llm"]
+    deadline = time.monotonic() + 5
+    while (not llm.calls or orch._lock.locked()) and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert llm.calls and not orch._lock.locked()  # 끊긴 턴은 끝났고 잠금은 풀렸다
+
+    status, _, raw = post(url + "/api/turn", turn_req("s1", 2, ["hello again"]))
+    lines = [json.loads(line) for line in raw.splitlines()]
+    assert status == 200 and [(line["kind"], line["turn_id"]) for line in lines] == [("ack", 2), ("reply", 2)]
+    assert lines[1]["say"] == "Slow hi!" and len(llm.calls) == 2
+    assert not orch._lock.locked()
 
 
 # ---------------------------------------------------------------- 세션과 로그
