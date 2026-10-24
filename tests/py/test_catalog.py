@@ -66,11 +66,10 @@ def test_exact_values_from_the_task_brief(catalog):
 
 
 def test_object_table_matches_the_task_brief(catalog):
-    svg_color_size = {"egg", "ball", "block"}
+    svg_color_size = {"egg", "ball", "block", "nest", "tree"}  # 스펙 5.7: nest, tree 도 색과 크기를 바꿀 수 있다
     svg_color_only = {"socks", "hat"}
-    svg_fixed = {"nest", "tree"}
     emoji = {"toys": "🧸", "sun": "☀️", "flower": "🌼", "apple": "🍎", "cookie": "🍪", "banana": "🍌"}
-    assert set(catalog.objects) == svg_color_size | svg_color_only | svg_fixed | set(emoji)
+    assert set(catalog.objects) == svg_color_size | svg_color_only | set(emoji)
     for kind in svg_color_size:
         assert catalog.objects[kind]["render"] == "svg"
         assert catalog.can_color(kind) and catalog.can_size(kind)
@@ -78,9 +77,6 @@ def test_object_table_matches_the_task_brief(catalog):
         assert catalog.objects[kind]["render"] == "svg"
         assert catalog.can_color(kind) and not catalog.can_size(kind)
         assert catalog.is_wearable(kind)
-    for kind in svg_fixed:
-        assert catalog.objects[kind]["render"] == "svg"
-        assert not catalog.can_color(kind) and not catalog.can_size(kind)
     for kind, char in emoji.items():
         assert catalog.objects[kind]["render"] == "emoji" and catalog.objects[kind]["emoji"] == char
         assert not catalog.can_color(kind) and not catalog.can_size(kind)
