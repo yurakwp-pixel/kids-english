@@ -2,7 +2,17 @@
 import { readNdjson } from "./ndjson.js";
 
 // 서버 시간 초과(8초)와 대체 대사가 있으니 보통은 그 안에 끝난다. 서버가 아예 멈췄을 때만 이 시간에 끊는다.
-const TURN_TIMEOUT_MS = 15000;
+// main.js 는 세션 준비를 기다리는 시간까지 이 한도 안에 넣는다(withDeadline + sendTurn 의 timeoutMs).
+export const TURN_TIMEOUT_MS = 15000;
+
+/** promise 의 값을 그대로, 또는 ms 안에 끝나지 않으면 `Error("<what> timed out")` 로 reject. */
+export function withDeadline(promise, ms, what = "wait") {
+  let timer = null;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out`)), Math.max(0, ms));
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
 
 const pad = (n, w = 2) => String(n).padStart(w, "0");
 
@@ -33,10 +43,10 @@ export async function startSession() {
 }
 
 // 턴 하나를 보내고 NDJSON 줄(ack, fast, reply)을 오는 대로 onLine 에 넘긴다. 모든 줄을 받으면 끝난다.
-// 서버가 200 이 아니면 `Error("turn failed: <status> <error>")`, 연결이 끊기거나 너무 오래 걸리면 그 오류로 reject.
-export async function sendTurn(req, onLine) {
+// 서버가 200 이 아니면 `Error("turn failed: <status> <error>")`, 연결이 끊기거나 너무 오래(timeoutMs) 걸리면 그 오류로 reject.
+export async function sendTurn(req, onLine, { timeoutMs = TURN_TIMEOUT_MS } = {}) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TURN_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), Math.max(0, timeoutMs));
   try {
     const res = await postJson("/api/turn", req, { signal: controller.signal });
     if (!res.ok) {

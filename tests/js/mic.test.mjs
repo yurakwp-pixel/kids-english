@@ -167,3 +167,32 @@ test("an on-device status other than available keeps the normal engine", async (
     assert.equal(mic.engine, "webspeech", String(local));
   }
 });
+
+test("a recognizer that never ends after stop is let go on a later start (the mic does not stay dead)", () => {
+  class Wedged {
+    static instances = [];
+    constructor() { Wedged.instances.push(this); }
+    start() {}
+    abort() {} // 브라우저가 끝(onend)을 끝내 알리지 않는다
+    stop() {}
+  }
+  let clock = 1000;
+  const r = recorder();
+  const mic = createMic({ lang: "en-US", maxAlternatives: 5, ...r, SpeechRecognition: Wedged, now: () => clock });
+  mic.start();
+  mic.stop(); // 감시 시간이 지나 main.js 가 멈췄다
+  clock += 500;
+  mic.start(); // 막 멈춘 것은 아직 기다린다(겹쳐 시작하지 않는다)
+  assert.equal(Wedged.instances.length, 1);
+  assert.deepEqual(r.events.at(-1), ["state", "idle"]);
+  clock += 1500;
+  mic.start(); // 오래 끝나지 않은 것은 놓고 새로 듣는다
+  assert.equal(Wedged.instances.length, 2);
+  assert.deepEqual(r.events.at(-1), ["state", "listening"]);
+  // 놓아 준 인식기가 늦게 무엇을 보내도 아무 일 없다
+  const old = Wedged.instances[0];
+  const count = r.events.length;
+  old.onresult?.({ resultIndex: 0, results: resultList(result(true, ["late", 0.9])) });
+  old.onend?.();
+  assert.equal(r.events.length, count);
+});

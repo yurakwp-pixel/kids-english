@@ -14,6 +14,9 @@ const HARD_ERRORS = {
   network: "network",
 };
 
+// 멈춘(stop) 인식기가 이만큼 지나도 끝(onend)을 알리지 않으면 고장 난 것으로 보고 놓아 준다(다음 start 에서 새로 듣는다).
+const RELEASE_AFTER_STOP_MS = 1500;
+
 function round2(x) {
   return typeof x === "number" && Number.isFinite(x) ? Math.round(x * 100) / 100 : 0;
 }
@@ -34,11 +37,13 @@ export function createMic({
   onInterim = () => {},
   onState = () => {},
   SpeechRecognition: SR = globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition,
+  now = () => Date.now(),
 } = {}) {
   const supported = typeof SR === "function";
   let localStatus = supported ? "checking" : "n/a"; // 디버그 화면용: available | downloadable | unavailable | n/a
   let useLocal = false;
   let rec = null;
+  let stoppedAt = null; // rec 에 stop() 을 보낸 때. 끝(onend)이 오면 rec 와 함께 비운다.
 
   if (supported && typeof SR.available === "function") {
     Promise.resolve()
@@ -54,6 +59,12 @@ export function createMic({
 
   function start() {
     if (!supported) return;
+    if (rec && stoppedAt !== null && now() - stoppedAt >= RELEASE_AFTER_STOP_MS) {
+      // 멈추라고 한 지 오래인데 끝을 알리지 않았다(듣기 감시 시간 뒤 등): 그 인식기를 놓아 주고 새로 듣는다.
+      rec.onresult = rec.onerror = rec.onend = null;
+      rec = null;
+      stoppedAt = null;
+    }
     if (rec) {
       // 앞 인식기가 아직 끝(onend)을 알리지 않았다. 겹쳐 시작하지 않고, 화면이 듣는 중으로 멈춰 있지 않게 idle 을 알린다.
       onState("idle");
@@ -101,7 +112,10 @@ export function createMic({
       onState("error", HARD_ERRORS[code] ?? "mic-error");
     };
     r.onend = () => {
-      if (rec === r) rec = null;
+      if (rec === r) {
+        rec = null;
+        stoppedAt = null;
+      }
       if (!delivered && !failed && !aborted) {
         delivered = true;
         onResult([]);
@@ -119,13 +133,15 @@ export function createMic({
     onState("listening");
   }
 
-  // 결과 없이 멈춘다(부모가 글자로 턴을 넣었을 때, 화면을 떠날 때).
+  // 결과 없이 멈춘다(부모가 글자로 턴을 넣었을 때, 듣기 감시 시간이 지났을 때, 화면을 떠날 때).
   function stop() {
     if (!rec) return;
+    stoppedAt ??= now(); // abort 가 곧바로 onend 를 부르면 거기서 다시 비운다
     try {
       rec.abort();
     } catch {
       rec = null;
+      stoppedAt = null;
     }
   }
 

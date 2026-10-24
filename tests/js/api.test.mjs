@@ -51,3 +51,20 @@ test("sendTurn rejects with the server's error code on a non-200 answer", async 
   globalThis.fetch = async () => Response.json({ ok: false, error: "bad_turn_id" }, { status: 400 });
   await assert.rejects(sendTurn({}, () => {}), /400 bad_turn_id/);
 });
+
+test("sendTurn gives up after timeoutMs when the server never answers", async () => {
+  globalThis.fetch = (url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+  });
+  const started = Date.now();
+  await assert.rejects(sendTurn({}, () => {}, { timeoutMs: 30 }), /abort/i);
+  assert.ok(Date.now() - started < 1000);
+});
+
+test("withDeadline passes the value through, or rejects once the time is up", async () => {
+  const { withDeadline, TURN_TIMEOUT_MS } = await import("../../web/js/api.js");
+  assert.equal(TURN_TIMEOUT_MS, 15000);
+  assert.equal(await withDeadline(Promise.resolve("2026-10-22_1905"), 50), "2026-10-22_1905");
+  await assert.rejects(withDeadline(new Promise(() => {}), 20, "session start"), /session start timed out/);
+  await assert.rejects(withDeadline(Promise.reject(new Error("boom")), 50), /boom/);
+});

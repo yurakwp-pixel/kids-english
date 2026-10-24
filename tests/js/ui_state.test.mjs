@@ -112,3 +112,55 @@ test("reducer does not mutate its input and ignores unknown events", () => {
   uiReducer(s, { type: "TAP_MIC" });
   assert.equal(s.mode, "idle");
 });
+
+// ---------------------------------------------------------------- (?) 힌트 (Task 15)
+
+const replied = (hint = "공을 차 보자 → Kick the ball!") =>
+  uiReducer({ ...initialUiState, mode: "thinking", turnId: 1 }, { type: "LINE_REPLY", turn_id: 1, say: "Kick the ball!", hint });
+
+test("the reply's korean_hint is kept, hidden until (?) is tapped", () => {
+  const s = replied();
+  assert.equal(s.hint, "공을 차 보자 → Kick the ball!");
+  assert.equal(s.hintShown, false);
+  assert.equal(replied(null).hint, "");
+  assert.equal(replied(42).hint, "");
+});
+
+test("tapping (?) shows the hint without starting a turn (no server call)", () => {
+  for (const mode of ["speaking", "idle", "listening"]) {
+    const s = { ...replied(), mode };
+    const tapped = uiReducer(s, { type: "TAP_HINT" });
+    assert.equal(tapped.hintShown, true, mode);
+    assert.equal(tapped.mode, mode, mode);
+    assert.equal(tapped.turnId, s.turnId, mode);
+  }
+});
+
+test("(?) does nothing without a hint or while thinking (that hint belongs to the last turn)", () => {
+  const none = { ...initialUiState };
+  assert.equal(uiReducer(none, { type: "TAP_HINT" }), none);
+  const thinking = { ...replied(), mode: "thinking" };
+  assert.equal(uiReducer(thinking, { type: "TAP_HINT" }), thinking);
+  const shown = uiReducer({ ...replied(), mode: "idle" }, { type: "TAP_HINT" });
+  assert.equal(uiReducer(shown, { type: "TAP_HINT" }), shown); // 이미 보이면 그대로
+});
+
+test("the next turn carries hint_requested once, then the hint hides", () => {
+  let s = uiReducer({ ...replied(), mode: "idle" }, { type: "TAP_HINT" });
+  s = uiReducer(s, { type: "TAP_MIC" });
+  assert.equal(s.hintShown, true); // 듣는 동안에도 보고 따라 말할 수 있다
+  s = uiReducer(s, { type: "MIC_RESULT", final: true, alts: [{ t: "kick the ball", c: 0.9 }] });
+  assert.equal(s.mode, "thinking");
+  assert.equal(s.hintRequested, true);
+  assert.equal(s.hintShown, false);
+  s = uiReducer(s, { type: "LINE_REPLY", turn_id: s.turnId, say: "Good job!", hint: "잘했어 → Good job!" });
+  s = uiReducer(s, { type: "TTS_END", turn_id: s.turnId });
+  s = uiReducer(uiReducer(s, { type: "TAP_MIC" }), { type: "MIC_RESULT", final: true, alts: [] });
+  assert.equal(s.hintRequested, false); // 이번에는 누르지 않았다
+});
+
+test("the initial state has no hint and asks for none", () => {
+  assert.equal(initialUiState.hint, "");
+  assert.equal(initialUiState.hintShown, false);
+  assert.equal(initialUiState.hintRequested, false);
+});
