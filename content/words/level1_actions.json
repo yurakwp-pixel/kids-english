@@ -1,0 +1,23 @@
+[
+{"id":"turn-around","en":"Turn around","ko":"뒤로 돌아","accept":["turn around","turn"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"dino","action":"turn_around"}},
+{"id":"walk","en":"Walk","ko":"걸어","accept":["walk","walking"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"dino","action":"walk"}},
+{"id":"hide","en":"Hide","ko":"숨어","accept":["hide","peekaboo"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"chomp","action":"hide"}},
+{"id":"kick-the-ball","en":"Kick the ball","ko":"공을 차","accept":["kick the ball","kick the {object}","kick {object}","kick"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"dino","action":"kick","needs":"ball"}},
+{"id":"stretch-your-arms","en":"Stretch your arms","ko":"팔을 쭉 펴","accept":["stretch your arms","stretch arms","stretch"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"dino","action":"stretch_arms"}},
+{"id":"fold-your-arms","en":"Fold your arms","ko":"팔짱 껴","accept":["fold your arms","fold arms"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"dino","action":"fold_arms"}},
+{"id":"thumbs-up","en":"Thumbs up","ko":"엄지 척","accept":["thumbs up","thumb up"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"dino","action":"thumbs_up"}},
+{"id":"climb-up","en":"Climb up","ko":"올라가","accept":["climb up","climb up the {object}","climb"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"climb_up","needs":"tree"}},
+{"id":"yawn","en":"Yawn","ko":"하품해","accept":["yawn"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"yawn"}},
+{"id":"sneeze","en":"Sneeze","ko":"재채기해","accept":["sneeze","achoo"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"sneeze"}},
+{"id":"take-a-deep-breath","en":"Take a deep breath","ko":"숨을 크게 쉬어","accept":["take a deep breath","deep breath"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"deep_breath"}},
+{"id":"clean-up-your-toys","en":"Clean up your toys","ko":"장난감 정리해","accept":["clean up your toys","clean up"],"level":1,"category":"action","source":"shunibini-A","present":{"type":"act","actor":"dino","action":"clean_up","removes":"toys"}},
+{"id":"throw-out","en":"Throw out the {object}","ko":"버려","accept":["throw out the {object}","throw out"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"throw_out","removes":"{object}"}},
+{"id":"put-on-your-socks","en":"Put on your socks","ko":"양말 신어","accept":["put on your socks","put on your {object}","put on {object}"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"put_on","needs":"socks"}},
+{"id":"wash-your-hands","en":"Wash your hands","ko":"손을 씻어","accept":["wash your hands","wash hands"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"wash_hands"}},
+{"id":"go-to-bed","en":"Go to bed","ko":"자러 가","accept":["go to bed"],"level":1,"category":"action","source":"shunibini-B","present":{"type":"act","actor":"dino","action":"go_to_bed"}},
+{"id":"jump","en":"Jump","ko":"뛰어","accept":["jump","chomp jump"],"level":1,"category":"action","source":"core","present":{"type":"act","actor":"chomp","action":"jump"}},
+{"id":"chomp","en":"Chomp the {object}","ko":"덥석 먹어","accept":["chomp the {object}","eat the {object}","chomp"],"level":1,"category":"action","source":"core","present":{"type":"act","actor":"chomp","action":"chomp","needs":"apple"}},
+{"id":"bark","en":"Bark","ko":"멍멍 짖어","accept":["bark","woof"],"level":1,"category":"action","source":"core","present":{"type":"act","actor":"chomp","action":"bark"}},
+{"id":"spin","en":"Spin","ko":"빙글빙글 돌아","accept":["spin","spin around"],"level":1,"category":"action","source":"core","present":{"type":"act","actor":"chomp","action":"spin"}},
+{"id":"sleep","en":"Sleep","ko":"쿨쿨 자","accept":["sleep"],"level":1,"category":"action","source":"core","present":{"type":"act","actor":"chomp","action":"sleep"}}
+]

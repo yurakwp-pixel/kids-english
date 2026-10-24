@@ -1,0 +1,8 @@
+[
+{"id":"hello","en":"Hello","ko":"안녕","accept":["hello","hi","hello chomp"],"level":1,"category":"social","source":"core","present":{"type":"act","actor":"chomp","action":"bark"}},
+{"id":"good-job","en":"Good job","ko":"잘했어","accept":["good job"],"level":1,"category":"social","source":"core","present":{"type":"mood","actor":"all","face":"happy"}},
+{"id":"give-me-five","en":"Give me five","ko":"하이파이브","accept":["give me five","high five"],"level":1,"category":"social","source":"core","present":{"type":"act","actor":"dino","action":"high_five"}},
+{"id":"lets-clap","en":"Let's clap","ko":"박수 치자","accept":["lets clap","clap"],"level":1,"category":"social","source":"core","present":{"type":"act","actor":"dino","action":"clap"}},
+{"id":"lets-dance","en":"Let's dance","ko":"춤추자","accept":["lets dance","dance"],"level":1,"category":"social","source":"core","present":{"type":"act","actor":"dino","action":"dance"}},
+{"id":"good-night","en":"Good night","ko":"잘 자","accept":["good night"],"level":1,"category":"social","source":"core","present":{"type":"act","actor":"chomp","action":"sleep"}}
+]
