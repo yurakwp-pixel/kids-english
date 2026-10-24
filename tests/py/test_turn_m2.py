@@ -8,6 +8,7 @@
   7. 2줄 ops 는 1줄 ops 를 되풀이하지 않는다
 """
 import json
+import re
 from pathlib import Path
 
 import jsonschema
@@ -478,3 +479,48 @@ def test_prompt_examples_are_replies_the_validator_keeps():
         assert answer["korean_hint"] and " → " in answer["korean_hint"]
     assert any(has_hangul(user["heard"][0]) and answer["ops"] == [] for user, answer in pairs)
     assert any(answer["ops"] for _, answer in pairs)  # LLM 이 장면을 바꾸는 예시도 있다
+
+
+def sentences(say):
+    """대사를 문장으로 나눈다: . ! ? 뒤의 공백에서 끊는다("Say: red egg!" 는 한 문장)."""
+    return [part for part in re.split(r"(?<=[.!?])\s+", say.strip()) if part]
+
+
+def test_prompt_examples_follow_the_one_or_two_sentence_rule():
+    # 규칙과 예시가 같은 말을 한다: 짧은 문장 한두 개, 리캐스트만 끝에 "Your turn!" 을 더할 수 있다
+    assert 'One or two short sentences; a recast may add "Your turn!" at the end.' in TEMPLATE
+    for user, answer in prompt_examples():
+        parts = sentences(answer["say"])
+        if answer["recast"] is not None and parts[-1] == "Your turn!":
+            parts = parts[:-1]
+        assert 1 <= len(parts) <= 2, (user["heard"], answer["say"])
+        assert "Your turn!" not in parts, answer["say"]  # "Your turn!" 은 리캐스트의 끝에만
+
+
+def test_prompt_names_the_only_answers_that_ask_the_child_to_speak():
+    # "다음에 할 말을 시키지 마" 의 예외는 리캐스트("Your turn!"), 한국어("Say: ..."), 고르기 질문뿐이다
+    assert "Do not tell the child what to do or say next" in TEMPLATE
+    assert ('Only three answers may ask the child to say something: the recast with "Your turn!", '
+            'the Korean case with "Say: ...", and the choice question below.') in TEMPLATE
+
+
+def test_prompt_states_the_id_rules_the_validator_uses():
+    assert '"scene" lists what was on screen BEFORE "applied_ops"' in TEMPLATE
+    assert '"ref" in "place": a thing, never "chomp" or "dino".' in TEMPLATE
+    assert 'an id that "applied_ops" added' in TEMPLATE
+    assert 'Things that "applied_ops" removed are gone.' in TEMPLATE
+    # 프롬프트가 말한 대로 검증기도 한다: applied_ops 가 만든 id 는 대상이 되고, 캐릭터는 ref 가 못 된다
+    applied = [{"op": "add", "kind": "ball", "id": "ball1", "count": 1}]
+    scene = [{"id": "chomp", "kind": "chomp"}, {"id": "dino", "kind": "dino"}, {"id": "tree1", "kind": "tree"}]
+    on_tree = [{"op": "move", "target": "ball1", "place": {"rel": "on", "ref": "tree1"}}]
+    reply, _ = validate_reply({"say": "Up it goes!", "ops": on_tree}, turn_id=1, catalog=CATALOG, scene=scene,
+                              applied_ops=applied)
+    assert reply["ops"] == on_tree
+    on_dino = [{"op": "move", "target": "ball1", "place": {"rel": "on", "ref": "dino"}}]
+    reply, _ = validate_reply({"say": "Up it goes!", "ops": on_dino}, turn_id=1, catalog=CATALOG, scene=scene,
+                              applied_ops=applied)
+    assert reply["ops"] == []
+    gone = [{"op": "act", "actor": "dino", "action": "kick", "target": "ball1"}]
+    reply, _ = validate_reply({"say": "Kick!", "ops": gone}, turn_id=1, catalog=CATALOG, scene=scene,
+                              applied_ops=[*applied, {"op": "remove", "target": "ball1"}])
+    assert reply["ops"] == []
