@@ -524,6 +524,56 @@ def test_hangul_input_check_comes_before_the_replaced_say_check(catalog):
     assert "ops_dropped_hangul" in issues and "ops_dropped_say_replaced" not in issues
 
 
+def _with_lang(lang, ops=None):
+    return {"say": "Red egg? Say: red egg!", "ops": ops if ops is not None else [{"op": "add", "kind": "egg"}],
+            "utterance": {"lang": lang, "words_used": [], "errors": []}}
+
+
+def test_a_reply_that_says_the_child_spoke_korean_has_no_ops(catalog):
+    # 아이의 한국어는 en-US 인식기를 거치면 영어처럼 보이는 글자로 온다. 한글 검사로는 못 잡고, 답의 utterance.lang 이 유일한 신호다(스펙 §4).
+    reply, issues = validate_reply(_with_lang("ko"), turn_id=1, catalog=catalog)
+    VALIDATOR.validate(reply)
+    assert reply["ops"] == [] and "ops_dropped_lang_ko" in issues
+    assert reply["say"] == "Red egg? Say: red egg!" and reply["utterance"]["lang"] == "ko"  # 말은 그대로 나간다
+
+
+def test_lang_ko_drops_ops_even_without_a_catalog_and_is_case_insensitive():
+    reply, issues = validate_reply(_with_lang(" KO "), turn_id=1)
+    assert reply["ops"] == [] and "ops_dropped_lang_ko" in issues and "ops_dropped_no_catalog" not in issues
+
+
+@pytest.mark.parametrize("lang", ["en", "mixed", "unknown"])
+def test_other_languages_keep_their_ops(catalog, lang):
+    reply, issues = validate_reply(_with_lang(lang), turn_id=1, catalog=catalog)
+    assert reply["ops"] == [{"op": "add", "kind": "egg", "id": "egg1", "count": 1}]
+    assert "ops_dropped_lang_ko" not in issues
+
+
+@pytest.mark.parametrize("utterance", [None, "ko", 5, {}, {"lang": "French"}, {"lang": None}, {"lang": ["ko"]}])
+def test_a_missing_or_broken_utterance_is_not_treated_as_korean(catalog, utterance):
+    body = _with_lang("en")
+    body["utterance"] = utterance
+    reply, issues = validate_reply(body, turn_id=1, catalog=catalog)
+    assert len(reply["ops"]) == 1 and "ops_dropped_lang_ko" not in issues
+
+
+def test_lang_ko_without_ops_has_no_ops_issue(catalog):
+    for ops in (None, []):
+        body = _with_lang("ko")
+        body["ops"] = ops
+        _, issues = validate_reply(body, turn_id=1, catalog=catalog)
+        assert not [i for i in issues if i.startswith("ops")]
+
+
+def test_hangul_input_is_reported_before_lang_ko_and_lang_ko_before_a_replaced_say(catalog):
+    _, issues = validate_reply(_with_lang("ko"), turn_id=1, catalog=catalog, input_has_hangul=True)
+    assert "ops_dropped_hangul" in issues and "ops_dropped_lang_ko" not in issues
+    body = _with_lang("ko")
+    body["say"] = 5
+    _, issues = validate_reply(body, turn_id=1, catalog=catalog)
+    assert "ops_dropped_lang_ko" in issues and "ops_dropped_say_replaced" not in issues
+
+
 def test_ops_that_are_not_a_list_are_still_reported_with_a_catalog(catalog):
     for raw in ("add an egg", 3, {"op": "add"}):
         reply, issues = validate_reply({"say": "Ok!", "ops": raw}, turn_id=1, catalog=catalog)

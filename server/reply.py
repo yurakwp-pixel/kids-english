@@ -20,6 +20,7 @@ issue 문자열 (고친 것이 있을 때만 들어간다):
   korean_hint_invalid / korean_hint_unsafe
   ops_invalid                       ops 가 목록이 아님
   ops_dropped_hangul                한글이 든 입력에는 ops 가 없어야 한다
+  ops_dropped_lang_ko               답의 utterance.lang 이 "ko" 다(스펙 §4): 아이의 한국어는 en-US 인식기에서 영어 글자처럼 와서 한글 검사로 못 잡는다
   ops_dropped_say_replaced          말 전체가 canned 대사로 바뀌었다: "다시 해 보자" 와 바뀐 장면이 섞이지 않게 ops 도 버린다
   ops_dropped_no_catalog            카탈로그 없이는 아무 op 도 통과시키지 않는다
   ops_item_dropped                  카탈로그/장면/안전 규칙에 맞지 않는 op 를 버렸다
@@ -116,6 +117,8 @@ def validate_reply(
         choice = _clean_choice(obj.get("choice"), issues)
         korean_hint = _clean_korean_hint(obj.get("korean_hint"), issues)
     recast = _clean_recast(obj.get("recast"), issues)
+    utterance_issues: list[str] = []  # issues 의 차례(ops 다음)를 지키려고 따로 모은다
+    utterance = _clean_utterance(obj.get("utterance"), utterance_issues)  # ops 검사에 lang 이 필요해서 먼저 정리한다
     ops, ops_issues = _validate_ops(
         obj.get("ops"),
         catalog=catalog,
@@ -123,10 +126,11 @@ def validate_reply(
         applied_ops=applied_ops,
         input_has_hangul=input_has_hangul,
         say_replaced=say_replaced,
+        lang_ko=utterance["lang"] == "ko",
     )
     issues.extend(ops_issues)
     mood = _clean_mood(obj.get("mood"), issues, catalog)
-    utterance = _clean_utterance(obj.get("utterance"), issues)
+    issues.extend(utterance_issues)
 
     reply = {  # 키 순서는 스펙 5.5 그대로, `say` 가 첫 키. 모르는 키는 여기서 버려진다.
         "say": say,
@@ -151,10 +155,11 @@ def _validate_ops(
     applied_ops: Sequence[dict],
     input_has_hangul: bool,
     say_replaced: bool = False,
+    lang_ko: bool = False,
 ) -> tuple[list[dict], list[str]]:
     """LLM 의 ops 를 검사해 (살아남은 ops, issues) 를 돌려준다.
 
-    통째로 버리는 경우(앞의 것이 먼저): 목록이 아님, 한글 입력, `say` 가 canned 대사로 바뀜, 카탈로그 없음.
+    통째로 버리는 경우(앞의 것이 먼저): 목록이 아님, 한글 입력, 답의 `utterance.lang` 이 "ko", `say` 가 canned 대사로 바뀜, 카탈로그 없음.
     그 밖에는 `_OpsChecker` 가 op 를 하나씩 본다.
     """
     if raw is None or raw == []:
@@ -163,6 +168,8 @@ def _validate_ops(
         return [], ["ops_invalid"]
     if input_has_hangul:  # 한글이 들어간 입력의 답에는 ops 가 없어야 한다(전역 제약)
         return [], ["ops_dropped_hangul"]
+    if lang_ko:  # LLM 이 "아이가 한국어로 말했다" 고 봤다: 화면은 바꾸지 않고 영어로 따라 말하게만 한다(스펙 §4)
+        return [], ["ops_dropped_lang_ko"]
     if say_replaced:  # "Hmm! Let's try that again!" 와 바뀐 장면이 같이 나가면 아이가 헷갈린다
         return [], ["ops_dropped_say_replaced"]
     if catalog is None:
