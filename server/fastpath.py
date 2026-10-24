@@ -307,6 +307,8 @@ def _present(word: Word, thing: _Thing | None, vocative: str | None, catalog: Ca
         doomed = list(dict.fromkeys(entry["id"] for entry in reversed(scene) if _is(entry, remove_kind, attrs)))
         if remove and remove.count is not None:
             doomed = doomed[:remove.count]
+        elif remove and not _said_plural(remove):
+            doomed = doomed[:1]  # "throw out the egg": 말과 화면이 같도록 하나만. 복수로 말했을 때만 전부
         ops.extend({"op": "remove", "target": ident} for ident in doomed)  # 가장 최근 것부터. 4개 자르기는 match 가 한다
     return ops
 
@@ -416,6 +418,11 @@ def _pair_noun(word: Word) -> bool:
     """"socks" 처럼 En 이 이미 복수이고 단어장에 단수("sock")가 따로 있는 말."""
     noun = _singular(word)
     return noun.endswith("s") and noun[:-1] in word.accept
+
+
+def _said_plural(thing: _Thing) -> bool:
+    """아이가 물건을 복수로 말했나("eggs"). 한 켤레 말("socks", "sock")은 언제나 하나로 본다."""
+    return not _pair_noun(thing.word) and thing.said == _plural(thing.word)
 
 
 def _plural(word: Word) -> str:

@@ -188,6 +188,18 @@ CASES = [
     (["throw out the two eggs"], [EGG1, item("egg2", "egg"), item("egg3", "egg")], "exact",
      [("act", "dino", "throw_out"), ("remove", "egg3"), ("remove", "egg2")]),
     (["throw out the egg"], [], "exact", [("act", "dino", "throw_out")]),
+    # 단수로 말하면 가장 최근 것 하나만, 복수로 말하면 전부(4개 자르기 안에서)
+    (["throw out the egg"], [EGG1, item("egg2", "egg"), item("egg3", "egg")], "exact",
+     [("act", "dino", "throw_out"), ("remove", "egg3")]),
+    (["throw out the eggs"], [EGG1, item("egg2", "egg"), item("egg3", "egg")], "exact",
+     [("act", "dino", "throw_out"), ("remove", "egg3"), ("remove", "egg2"), ("remove", "egg1")]),
+    (["throw out the ball"], [BALL1, item("ball2", "ball")], "exact", [("act", "dino", "throw_out"), ("remove", "ball2")]),
+    (["throw out the red apple"], [APPLE1, item("apple2", "apple")], "exact",
+     [("act", "dino", "throw_out"), ("remove", "apple2")]),
+    (["throw out the socks"], [item("socks1", "socks"), item("socks2", "socks")], "exact",
+     [("act", "dino", "throw_out"), ("remove", "socks2")]),  # 한 켤레 말은 하나
+    (["throw out the sock"], [item("socks1", "socks"), item("socks2", "socks")], "exact",
+     [("act", "dino", "throw_out"), ("remove", "socks2")]),
     (["throw out"], [EGG1], "partial", [("act", "dino", "throw_out")]),
     # ---- 입기, 오르기
     (["put on your socks"], [], "exact", [("add", "socks"), ("act", "dino", "put_on")]),
