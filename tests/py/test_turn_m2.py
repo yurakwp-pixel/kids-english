@@ -372,6 +372,29 @@ def test_partial_fallback_keeps_the_right_sentence(tmp_path, script):
     schema_ok(reply)
 
 
+@pytest.mark.parametrize("say", ["공을 차!", "Wrong! That is wrong.", ""])
+def test_partial_with_an_unusable_say_keeps_the_right_sentence(tmp_path, say):
+    # 1줄이 이미 장면을 바꿨다. LLM 의 say 를 통째로 못 쓰면 "Hmm! Let's try that again!" 대신 fastpath 의 바른 문장
+    orch, _ = make_m2(tmp_path, [reply_json(say=say, ops=[{"op": "act", "actor": "chomp", "action": "bark"}])])
+    hatch_first(orch)
+    first, reply = turn(orch, "s", 2, ["kick ball"], HATCHED_SCENE)
+    expected = match(["kick ball"], BANK, CATALOG, HATCHED_SCENE, turn_id=2)
+    assert first["ops"] == expected.ops
+    assert reply["source"] == "fallback" and reply["say"] == expected.say and reply["ops"] == []
+    assert reply["korean_hint"] == "공을 차 → Kick the ball!"
+    assert isinstance(reply["latency"]["llm_ms"], int)  # LLM 은 답했다(못 쓸 말이었을 뿐)
+    assert "say_replaced" in log_events(tmp_path, "s")[-1]["issues"]
+    schema_ok(reply)
+
+
+def test_no_match_with_an_unusable_say_is_still_the_canned_line(tmp_path):
+    # fastpath 가 없으면 바뀐 장면도 없다: canned 대사 그대로, source 는 "llm"(M1 그대로)
+    orch, _ = make_m2(tmp_path, [reply_json(say="공을 차!")])
+    hatch_first(orch)
+    _, reply = turn(orch, "s", 2, ["i like eggs"], HATCHED_SCENE)
+    assert reply["source"] == "llm" and reply["say"] in ("Hmm! Let's try that again!", "Hmm! One more time, please!")
+
+
 def test_no_match_fallback_is_the_canned_line(tmp_path):
     orch, _ = make_m2(tmp_path, [LLMError("dead")])
     hatch_first(orch)

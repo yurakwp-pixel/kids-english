@@ -26,7 +26,8 @@
        다시 쓰이지 않는다. 한국어 입력이면 ops 를 비운다(전역 제약). LLM 이 보낸 hatch 는 버린다(부화는 서버만 한다).
        1줄과 2줄의 ops 를 합쳐 한 턴에 max_ops(4)개를 넘지 않게 2줄을 자른다.
      - LLM 시간 초과 / 실패 / JSON 아님 → source "fallback". partial 이면 장면은 이미 바뀌었으니 fastpath 의 바른 문장으로,
-       아니면 `fallback_reply("timeout" | "error")`. say 만 canned 로 바뀐 답은 그대로 "llm".
+       아니면 `fallback_reply("timeout" | "error")`. say 를 통째로 못 써 canned 로 바뀐 답(say_replaced)도 partial 이면 같은
+       바른 문장의 "fallback" 이고, 아니면(장면이 그대로) canned 대사 그대로 "llm".
   6. 2줄 `{"kind":"reply","turn_id":N,"source":..., **reply, "latency":{"llm_ms":int|None,"total_ms":int}}`,
      세션 로그에 "turn" 한 줄. 어떤 실패에도 2줄은 나간다. 놀이는 멈추지 않는다.
 
@@ -319,7 +320,9 @@ class TurnOrchestrator:
         reply, issues = validate_reply(
             obj, turn_id=turn.turn_id, catalog=self.catalog, scene=turn.scene,
             applied_ops=plan.applied_ops(), input_has_hangul=turn.korean)
-        if obj is None:  # JSON 을 찾지 못했다(issues 에 reply_not_object)
+        # JSON 을 찾지 못했다(issues 에 reply_not_object). 또는 partial 인데 say 를 통째로 못 써서(say_replaced) canned
+        # "Hmm! Let's try that again!" 이 됐다: 장면은 1줄이 이미 바꿨으니 fastpath 의 바른 문장으로 답한다.
+        if obj is None or ("say_replaced" in issues and plan.fast is not None):
             return _Answer(self._fallback(turn, plan, "error"), "fallback", result.latency_ms, None, issues)
         reply["ops"] = self._second_line_ops(reply["ops"], plan, issues)
         return _Answer(reply, "llm", result.latency_ms, None, issues)
@@ -336,7 +339,8 @@ class TurnOrchestrator:
         return kept
 
     def _fallback(self, turn: _Turn, plan: _Plan, reason: str) -> dict:
-        """LLM 이 못 답했을 때. partial 이면 장면은 이미 바뀌었으니 "다시 해 보자" 대신 fastpath 의 바른 문장으로 답한다."""
+        """LLM 이 못 답했거나 쓸 수 없는 말만 했을 때. partial 이면 장면은 이미 바뀌었으니 "다시 해 보자" 대신
+        fastpath 의 바른 문장으로 답한다."""
         if plan.fast is not None:
             return self._template(turn, plan.fast)[0]
         return fallback_reply(reason, turn.turn_id)  # type: ignore[arg-type]
