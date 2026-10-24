@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:  # `python scripts/bench_llm.py` 로 실행해도 
 
 from server.config import load_config, scrub_llm_env  # noqa: E402
 from server.llm import LLMError  # noqa: E402
+from server.prompt_builder import NONE_YET, build_system_prompt, build_turn_message  # noqa: E402
 from server.llm.claude_agent import (  # noqa: E402
     SYSTEM_PROMPT_FILE,
     ClaudeAgentLLM,
@@ -51,14 +52,13 @@ def bench_workdir() -> Path:
 
 
 def fill_prompt(template: str) -> str:
-    """M1: 단어장과 카탈로그가 아직 없으니 자리표시자를 "(none yet)" 으로 채운다(R1, Task 6 전까지)."""
-    return template.replace("{VOCAB}", "(none yet)").replace("{CATALOG}", "(none yet)")
+    """서버와 같은 시스템 프롬프트: M1 은 단어장과 카탈로그가 없어 둘 다 "(none yet)" 이다."""
+    return build_system_prompt(template, vocab=NONE_YET, catalog=NONE_YET)
 
 
 def turn_message(text: str) -> str:
-    """Task 6 build_turn_message 와 같은 모양의 한 줄 JSON(인식 후보 하나, 빈 장면)."""
-    return json.dumps({"heard": [text], "scene": [], "applied_ops": [], "hint_requested": False},
-                      ensure_ascii=False)
+    """서버와 같은 한 줄 JSON(인식 후보 하나, 빈 장면)."""
+    return build_turn_message({"asr": {"alternatives": [{"t": text}]}}, ())
 
 
 def percentile(values: list[float], p: float) -> float:

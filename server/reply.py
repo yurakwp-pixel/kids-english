@@ -27,6 +27,7 @@ import re
 from typing import Any, Sequence
 
 from server.canned import fallback_reply
+from server.text import has_hangul
 
 MAX_SAY_WORDS = 15
 MAX_ENGLISH_CHARS = 200  # say / recast.model / choice 한 개. 15단어여도 글자 수가 말이 안 되면 거른다.
@@ -39,8 +40,6 @@ MAX_ERRORS, MAX_ERROR_VALUE_CHARS, MAX_ERROR_KEY_CHARS = 10, 100, 30
 ACTORS = ("chomp", "dino")
 LANGS = ("en", "ko", "mixed", "unknown")
 
-# 한글 음절, 자모(호환 자모 포함), 확장 자모, 반각 한글. 자모만 있는 "ㅋㅋ" 도 한글로 본다.
-_HANGUL = re.compile("[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-퟿ﾠ-ￜ]")
 _URL = re.compile(
     r"[a-z][a-z0-9+.-]*://|www\.|\b[a-z0-9-]+\.(?:com|net|org|kr|io|app|dev|tv|xyz)\b",
     re.IGNORECASE,
@@ -161,8 +160,8 @@ def _squash(text: str) -> str:
 
 
 def _text_problem(text: str) -> str | None:
-    """아이에게 보여 주고 읽어 줄 영어에 들어가면 안 되는 것: 한글, `<`, URL."""
-    if _HANGUL.search(text):
+    """아이에게 보여 주고 읽어 줄 영어에 들어가면 안 되는 것: 한글(`server.text.has_hangul`), `<`, URL."""
+    if has_hangul(text):
         return "hangul"
     if "<" in text:
         return "markup"

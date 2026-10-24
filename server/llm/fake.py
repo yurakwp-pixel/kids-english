@@ -19,6 +19,9 @@ class FakeLLM:
         self.delay_s = delay_s
         self.system_prompt: str | None = None
         self.calls: list[str] = []
+        # 동시에 complete 안에 있었던 호출 수의 최댓값. 턴 처리기가 턴을 하나씩 보내는지 보는 계기다.
+        self.max_concurrent = 0
+        self._active = 0
         self._next = 0
         self._lock = threading.Lock()
 
@@ -31,14 +34,20 @@ class FakeLLM:
             self.calls.append(user_msg)
             item = self._script[min(self._next, len(self._script) - 1)]
             self._next += 1
-        if self.delay_s > timeout_s:
-            time.sleep(max(timeout_s, 0.0))  # 진짜 LLM 처럼 제한 시간만큼 기다렸다가 포기한다
-            raise LLMTimeout(f"no answer within {timeout_s}s")
-        if self.delay_s > 0:
-            time.sleep(self.delay_s)
-        if isinstance(item, BaseException):
-            raise item
-        return LLMResult(text=item, latency_ms=int((time.perf_counter() - started) * 1000))
+            self._active += 1
+            self.max_concurrent = max(self.max_concurrent, self._active)
+        try:
+            if self.delay_s > timeout_s:
+                time.sleep(max(timeout_s, 0.0))  # 진짜 LLM 처럼 제한 시간만큼 기다렸다가 포기한다
+                raise LLMTimeout(f"no answer within {timeout_s}s")
+            if self.delay_s > 0:
+                time.sleep(self.delay_s)
+            if isinstance(item, BaseException):
+                raise item
+            return LLMResult(text=item, latency_ms=int((time.perf_counter() - started) * 1000))
+        finally:
+            with self._lock:
+                self._active -= 1
 
     def end_session(self) -> None:
         """할 일 없음. `system_prompt` 와 `calls` 는 테스트가 끝난 뒤에도 살펴볼 수 있게 남겨 둔다."""

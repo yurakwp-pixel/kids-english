@@ -12,11 +12,12 @@ REAL_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def project_root(tmp_path):
-    """임시 프로젝트 루트: 진짜 web/ 사본 + 비어 있는 docs/, shared/ + 노출되면 안 되는 .env, run.py.
+    """임시 프로젝트 루트: 진짜 web/, prompts/ 사본 + 비어 있는 docs/, shared/ + 노출되면 안 되는 .env, run.py.
 
-    테스트가 진짜 docs/ 폴더에 파일을 남기지 않도록 모든 서버 테스트는 이 루트에서 돈다.
+    테스트가 진짜 docs/, data/ 폴더에 파일을 남기지 않도록 모든 서버 테스트는 이 루트에서 돈다.
     """
     shutil.copytree(REAL_ROOT / "web", tmp_path / "web")
+    shutil.copytree(REAL_ROOT / "prompts", tmp_path / "prompts")
     (tmp_path / "docs").mkdir()
     (tmp_path / "shared").mkdir()
     (tmp_path / ".env").write_text("CLAUDE_CODE_OAUTH_TOKEN=do-not-serve\n", encoding="utf-8")
@@ -26,21 +27,27 @@ def project_root(tmp_path):
 
 @pytest.fixture
 def make_base_url(project_root):
-    """서버를 0번 포트(빈 포트 자동 배정)로 스레드에서 띄우는 팩토리. 테스트가 끝나면 모두 내린다."""
+    """서버를 0번 포트(빈 포트 자동 배정)로 스레드에서 띄우는 팩토리. 테스트가 끝나면 모두 내린다.
+
+    orchestrator_factory(cfg) 를 주면 그 오케스트레이터를 단다(없으면 M0 처럼 None: /api/turn 은 503).
+    """
     servers = []
 
-    def _make(argv):
+    def _make(argv, orchestrator_factory=None):
         cfg = load_config(project_root, ["--port", "0", *argv], environ={})
-        server = make_server(cfg, None)
+        orchestrator = orchestrator_factory(cfg) if orchestrator_factory else None
+        server = make_server(cfg, orchestrator)
         threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
-        servers.append(server)
+        servers.append((server, orchestrator))
         host, port = server.server_address[:2]
         return f"http://{host}:{port}"
 
     yield _make
-    for server in servers:
+    for server, orchestrator in servers:
         server.shutdown()
         server.server_close()
+        if orchestrator is not None:
+            orchestrator.close()
 
 
 @pytest.fixture
