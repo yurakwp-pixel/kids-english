@@ -4,11 +4,53 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Chomp's English Playground</title>
+  <link rel="icon" href="data:,"><!-- 빈 아이콘: /favicon.ico 404 요청을 만들지 않는다 -->
   <link rel="stylesheet" href="/css/app.css">
+  <script type="module" src="/js/main.js"></script>
 </head>
 <body>
-  <main>
-    <h1>Hello, Chomp!</h1>
-  </main>
+  <!-- 아이 화면: 외부 리소스 없음(CDN·웹폰트·이미지 URL 없음). 그림은 인라인 SVG 와 이모지(시스템 글꼴). -->
+  <div id="app" data-mode="idle">
+    <main class="play">
+      <section class="stage">
+        <!-- 🏠 는 지금은 자리만 있다(눌러도 아무 일 없음). -->
+        <button id="home" class="home" type="button" aria-label="Home">🏠</button>
+        <svg id="board" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <defs>
+            <linearGradient id="sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="470">
+              <stop offset="0" stop-color="#bfe7ff"/>
+              <stop offset="1" stop-color="#eef9ff"/>
+            </linearGradient>
+          </defs>
+          <!-- 하늘과 땅은 viewBox 밖까지 넓게 칠해서 화면 비율이 달라도 빈 띠가 생기지 않게 한다 -->
+          <rect x="-3000" y="-2000" width="7200" height="2470" fill="url(#sky)"/>
+          <g fill="#fff" opacity=".9">
+            <circle cx="190" cy="110" r="34"/><circle cx="232" cy="96" r="44"/><circle cx="280" cy="114" r="30"/>
+            <circle cx="820" cy="80" r="26"/><circle cx="854" cy="68" r="34"/><circle cx="892" cy="84" r="24"/>
+          </g>
+          <text x="1090" y="130" font-size="96" text-anchor="middle">☀️</text>
+          <ellipse cx="230" cy="500" rx="400" ry="120" fill="#a6dc84"/>
+          <ellipse cx="1010" cy="510" rx="440" ry="130" fill="#a6dc84"/>
+          <rect x="-3000" y="470" width="7200" height="2000" fill="#8fd16a"/>
+          <rect x="-3000" y="470" width="7200" height="8" fill="#7cc257"/>
+          <!-- 쇠사슬을 묶어 둔 말뚝 -->
+          <rect x="733" y="452" width="18" height="40" rx="5" fill="#a0703c"/>
+          <!-- 멍멍이: 위치(transform) > 통통 튀기(.hop, CSS) > 그림(#chomp-art, chompSvg) -->
+          <g id="chomp" transform="translate(429 138) scale(1.8)">
+            <g class="hop"><g id="chomp-art"></g></g>
+          </g>
+        </svg>
+      </section>
+
+      <div id="bubble" class="bubble"><p id="say" lang="en">Hi! I'm Chomp! Let's talk!</p></div>
+
+      <div class="controls">
+        <p id="heard" class="heard" lang="en" hidden></p>
+        <button id="mic" class="mic" type="button" aria-label="Talk">🎤</button>
+        <p id="unsupported" class="unsupported" lang="ko" hidden>Edge나 Chrome에서 열어 주세요</p>
+        <p id="notice" class="notice" lang="ko" hidden></p>
+      </div>
+    </main>
+  </div>
 </body>
 </html>

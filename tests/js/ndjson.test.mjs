@@ -49,3 +49,40 @@ test("readNdjson parses a final line that has no trailing newline", async () => 
 test("readNdjson rejects on a malformed line instead of skipping it", async () => {
   await assert.rejects(collect(streamOf(new TextEncoder().encode("not json\n"))), SyntaxError);
 });
+
+// 아직 닫히지 않은 스트림: 받는 쪽이 일찍 멈추면 cancel 이 불려야 한다(연결을 붙잡고 있지 않게).
+function openStreamOf(text, cancelled) {
+  return new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode(text)); },
+    cancel(reason) { cancelled.push(reason); },
+  });
+}
+
+test("readNdjson cancels the stream when the consumer stops early", async () => {
+  const cancelled = [];
+  const stream = openStreamOf('{"a":1}\n{"b":2}\n', cancelled);
+  for await (const obj of readNdjson(stream)) {
+    assert.deepEqual(obj, { a: 1 });
+    break;
+  }
+  assert.equal(cancelled.length, 1);
+  assert.equal(stream.locked, false);
+});
+
+test("readNdjson cancels the stream when a line fails to parse", async () => {
+  const cancelled = [];
+  const stream = openStreamOf('{"a":1}\nnot json\n', cancelled);
+  await assert.rejects(collect(stream), SyntaxError);
+  assert.equal(cancelled.length, 1);
+  assert.equal(stream.locked, false);
+});
+
+test("readNdjson does not cancel a stream that ended normally", async () => {
+  const cancelled = [];
+  const stream = new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('{"a":1}\n')); controller.close(); },
+    cancel(reason) { cancelled.push(reason); },
+  });
+  assert.deepEqual(await collect(stream), [{ a: 1 }]);
+  assert.equal(cancelled.length, 0);
+});
