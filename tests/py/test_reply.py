@@ -13,10 +13,12 @@ import jsonschema
 import pytest
 
 from server.canned import fallback_reply
+from server.catalog import load_catalog
 from server.reply import parse_reply_text, validate_reply
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = json.loads((ROOT / "shared" / "schemas" / "turn_reply.schema.json").read_text(encoding="utf-8"))
+CATALOG = load_catalog(ROOT / "shared" / "catalog.json")
 VALIDATOR = jsonschema.Draft202012Validator(SCHEMA)  # 한 번만 만든다: jsonschema.validate() 는 부를 때마다 스키마를 다시 점검해 느리다
 FIXTURE = ROOT / "tests" / "fixtures" / "llm_outputs.jsonl"
 KEYS = ["say", "recast", "choice", "korean_hint", "ops", "mood", "utterance"]
@@ -270,10 +272,10 @@ def test_choice_drops_bad_items_then_trims():
     assert "choice_item_dropped" in issues and "choice_trimmed" in issues
 
 
-# ---------------------------------------------------------------- ops (M1: 카탈로그 없음)
+# ---------------------------------------------------------------- ops (카탈로그 검사 자체는 test_reply_ops.py)
 
 
-def test_m1_drops_all_ops_without_catalog():
+def test_all_ops_are_dropped_without_a_catalog():
     r, issues = validate_reply({"say": "Ok!", "ops": [{"op": "add", "kind": "egg"}]}, turn_id=1)
     assert r["ops"] == [] and "ops_dropped_no_catalog" in issues
 
@@ -297,10 +299,10 @@ def test_hangul_input_never_keeps_ops():
     assert r["ops"] == [] and "ops_dropped_hangul" in issues
 
 
-def test_ops_are_dropped_even_if_a_catalog_object_is_passed_before_task_12():
-    # 카탈로그 검사는 Task 12 에서 붙는다. 그 전에는 카탈로그가 있어도 검증 안 된 op 를 화면에 내보내지 않는다.
-    r, issues = validate_reply({"say": "Ok!", "ops": [{"op": "add", "kind": "egg"}]}, turn_id=1, catalog=object())
-    assert r["ops"] == [] and any(i.startswith("ops_") for i in issues)
+def test_a_catalog_lets_a_valid_op_through():
+    r, issues = validate_reply({"say": "Ok!", "ops": [{"op": "add", "kind": "egg"}]}, turn_id=1, catalog=CATALOG)
+    assert r["ops"] == [{"op": "add", "kind": "egg", "id": "egg1", "count": 1}]
+    assert not [i for i in issues if i.startswith("ops")]
 
 
 # ---------------------------------------------------------------- mood
@@ -492,11 +494,12 @@ def test_schema_accepts_the_spec_example_and_all_nullable_fields():
 # ---------------------------------------------------------------- 퍼징
 
 
-def test_fuzzed_outputs_always_match_schema():
+@pytest.mark.parametrize("catalog", [None, CATALOG], ids=["no_catalog", "with_catalog"])
+def test_fuzzed_outputs_always_match_schema(catalog):
     schema = json.loads(Path("shared/schemas/turn_reply.schema.json").read_text(encoding="utf-8"))
     for line in Path("tests/fixtures/llm_outputs.jsonl").read_text(encoding="utf-8").splitlines():
         obj = parse_reply_text(json.loads(line)["text"])
-        r, _ = validate_reply(obj, turn_id=7)
+        r, _ = validate_reply(obj, turn_id=7, catalog=catalog)
         jsonschema.validate(r, schema)
 
 
@@ -513,7 +516,7 @@ def test_every_fixture_line_yields_a_schema_valid_reply(case):
     r, issues = validate_reply(parse_reply_text(case["text"]), turn_id=7)
     jsonschema.validate(r, SCHEMA)
     assert list(r) == KEYS and not BAD_SAY.search(r["say"]) and len(r["say"].split()) <= 15
-    assert r["ops"] == []  # M1: LLM 의 ops 는 화면에 나가지 않는다
+    assert r["ops"] == []  # 카탈로그 없이는 LLM 의 ops 가 화면에 나가지 않는다
     for issue in case.get("issues", []):
         assert issue in issues, f"{case['name']}: expected issue {issue!r}, got {issues}"
     if case.get("clean"):
@@ -539,6 +542,8 @@ _JUNK = [
     ["a", "b", "c", "d", "e"], ["a", 1, None, "가"], {}, {"op": "add"}, {"op": "add", "kind": "egg"},
     {"model": "Kick!", "ask_repeat": True}, {"actor": "dino", "face": "happy"},
     {"lang": "en", "words_used": [], "errors": []}, {"x": [{"y": None}]}, [[]], [{}],
+    [{"op": "act", "actor": "dino", "action": "kick", "target": "ball1"}], [{"op": "add", "kind": "egg", "count": 99}],
+    [{"op": "set", "target": "chomp", "face": "happy"}, {"op": "explode"}, "x"], [{"op": "add", "kind": "dragon"}] * 6,
 ]
 
 
@@ -571,11 +576,12 @@ def test_random_garbage_always_yields_schema_valid_and_stable_replies():
     rng = random.Random(20261022)
     for i in range(3000):
         body = _mutated_reply(rng)
-        for catalog, hangul in ((None, False), (None, True), (object(), False)):
+        for catalog, hangul in ((None, False), (None, True), (CATALOG, False), (CATALOG, True)):
             r, _ = validate_reply(body, turn_id=i, catalog=catalog, input_has_hangul=hangul)
             VALIDATOR.validate(r)
             assert list(r) == KEYS and not BAD_SAY.search(r["say"]) and len(r["say"].split()) <= 15
-            again, issues = validate_reply(r, turn_id=i)
+            assert len(r["ops"]) <= 4 and (catalog is not None and not hangul or r["ops"] == [])
+            again, issues = validate_reply(r, turn_id=i, catalog=catalog, input_has_hangul=hangul)
             assert again == r and issues == [], (body, r, issues)
 
 
