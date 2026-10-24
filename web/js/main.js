@@ -16,6 +16,7 @@ import { layout } from "./scene/layout.js";
 import { render as renderBoard, setChompMouth } from "./scene/render.js";
 import { createDirector } from "./scene/director.js";
 import { createDebugPanel } from "./debug.js";
+import { startShowing, endTurn } from "./turn_end.js";
 
 const GREETING = "Hi! I'm Chomp! Let's talk!";
 const GREETING_HINT = "인사해 보자 → Hello, Chomp!"; // 첫 화면의 (?): 아직 답이 없어도 처음 할 말을 알려 준다
@@ -115,8 +116,11 @@ function dispatch(event) {
   const prev = state;
   state = uiReducer(prev, event);
   if (state === prev) return false;
-  renderUi(prev, state);
-  runEffects(prev, state, event);
+  try {
+    renderUi(prev, state);
+  } finally {
+    runEffects(prev, state, event); // 그리기가 throw 해도 전이에 딸린 일(턴 보내기, 말하기 → TTS_END)은 한다: 상태가 멈추지 않게
+  }
   return true;
 }
 
@@ -194,8 +198,7 @@ async function runTurn(turnId, alternatives, engine, hintRequested) {
   const started = performance.now();
   const ms = () => Math.round(performance.now() - started);
   let replyLine = null;
-  let replyShown = null; // 장면이 먼저 움직이고 나서 LINE_REPLY 를 보낸다
-  let replied = false;
+  let replyShown = null; // startShowing: 장면이 먼저 움직이고 나서 LINE_REPLY 를 보낸다. reply 줄이 안 오면 null
   try {
     // 세션·카탈로그 준비도 15초 한도 안에서 기다린다(서버가 멈춰 있어도 생각 중에 갇히지 않는다).
     const [sessionId] = await withDeadline(Promise.all([sessionReady, catalogReady]), TURN_TIMEOUT_MS, "session start");
@@ -219,20 +222,25 @@ async function runTurn(turnId, alternatives, engine, hintRequested) {
       } else if (line.kind === "reply" && !replyLine) {
         replyLine = line;
         director.play([...(Array.isArray(line.ops) ? line.ops : []), ...moodOps(line.mood)], "reply");
-        replyShown = director.whenIdle(SAY_AFTER_SCENE_MAX_MS).then(() => {
-          // dispatch 의 결과를 쓴다: 리듀서가 이 답을 받지 않았으면(다른 턴, 다른 상태) 아래에서 대체 대사를 낸다
-          replied = dispatch({
+        // dispatch 의 결과(true = 리듀서가 이 답을 받았다)가 endTurn 으로 간다. 받지 않았으면(다른 턴, 다른 상태) 대체 대사.
+        replyShown = startShowing(
+          () => director.whenIdle(SAY_AFTER_SCENE_MAX_MS),
+          () => dispatch({
             type: "LINE_REPLY", turn_id: line.turn_id, say: line.say, face: chompFace(line.mood), hint: line.korean_hint,
-          });
-        });
+          }),
+        );
       }
     }, { timeoutMs: Math.max(1000, TURN_TIMEOUT_MS - ms()) });
   } catch (error) {
     debug?.failed(error, ms());
   }
-  if (replyShown) await replyShown;
-  // 서버가 꺼졌거나 줄이 깨졌어도 놀이는 멈추지 않는다.
-  if (!replied) dispatch({ type: "LINE_REPLY", turn_id: turnId, say: CLIENT_FALLBACK, face: "happy", hint: "" });
+  // 서버가 꺼졌거나 줄이 깨졌거나, 답을 보이다가(연출 기다리기, dispatch, 그리기) 무엇이 throw 해도 놀이는 멈추지 않는다:
+  // endTurn 은 reject 하지 않고, 답이 보이지 않았으면 대체 대사를 낸다(생각 중에 갇히지 않는다).
+  await endTurn(
+    replyShown,
+    () => dispatch({ type: "LINE_REPLY", turn_id: turnId, say: CLIENT_FALLBACK, face: "happy", hint: "" }),
+    (error) => debug?.failed(error, ms()),
+  );
 }
 
 // ---------------------------------------------------------------- 소리 깨우기와 효과음
