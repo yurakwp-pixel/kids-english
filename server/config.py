@@ -46,12 +46,31 @@ def parse_dotenv(text: str) -> dict[str, str]:
     return env
 
 
+# 아이 대화용 claude.exe 는 서버 프로세스의 환경을 그대로 물려받는다(SDK 는 변수를 지우는 방법이 없다).
+# 그래서 서버가 시작할 때 아래 변수를 환경에서 지운다. 값은 어디에도 출력하지 않고 이름만 돌려준다.
+# - ANTHROPIC_*: API 키·AUTH_TOKEN 은 구독 OAuth 보다 먼저 쓰이고(요금), BASE_URL 은 요청을 다른 곳으로 보내며,
+#   DEFAULT_*_MODEL 같은 값은 "haiku" 가 가리키는 모델을 바꾼다.
+# - CLAUDE*: 이 서버를 Claude Code(데스크톱 미리보기, 터미널 패널) 안에서 띄우면 부모 세션의 변수가 따라온다.
+#   세션 id·메시징 소켓은 아이용 claude.exe 를 부모 세션에 잇고, CLAUDE_CODE_SIMPLE(bare 모드)은 구독 인증을 막는다.
+SCRUB_ENV_PREFIXES = ("ANTHROPIC_", "CLAUDE")
+# 사용자가 일부러 정하는 값이라 남긴다: 직접 받은 구독 토큰, Windows 의 Git Bash 위치, 설정 폴더 위치.
+KEEP_ENV_KEYS = frozenset({OAUTH_TOKEN_KEY, "CLAUDE_CODE_GIT_BASH_PATH", "CLAUDE_CONFIG_DIR"})
+
+
+def scrub_llm_env(environ: MutableMapping[str, str]) -> list[str]:
+    """environ 에서 위 규칙에 걸리는 변수를 지우고, 지운 이름 목록을 돌려준다(값은 돌려주지 않는다)."""
+    removed = [
+        key for key in list(environ)
+        if key.upper().startswith(SCRUB_ENV_PREFIXES) and key.upper() not in KEEP_ENV_KEYS
+    ]
+    for key in removed:
+        del environ[key]
+    return removed
+
+
 def scrub_api_key_env(environ: MutableMapping[str, str]) -> bool:
-    """환경에서 ANTHROPIC_API_KEY 를 지워 API 요금이 실수로 나가지 않게 한다. 지웠으면 True."""
-    if API_KEY_KEY in environ:
-        del environ[API_KEY_KEY]
-        return True
-    return False
+    """예전 이름. `scrub_llm_env` 와 같이 지우고, 하나라도 지웠으면 True(API_KEY 외 인증 변수도 지운다)."""
+    return bool(scrub_llm_env(environ))
 
 
 def _read_dotenv(root: Path) -> dict[str, str]:

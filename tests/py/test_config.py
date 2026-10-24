@@ -1,4 +1,4 @@
-from server.config import Config, load_config, parse_dotenv, scrub_api_key_env
+from server.config import Config, load_config, parse_dotenv, scrub_api_key_env, scrub_llm_env
 
 
 def test_parse_dotenv_ignores_comments_and_quotes():
@@ -29,6 +29,33 @@ def test_parse_dotenv_skips_lines_without_equals_and_keeps_inner_equals():
 
 def test_parse_dotenv_strips_only_a_matching_quote_pair():
     assert parse_dotenv("A='x y'\nB=\"it's\"\nC='open\n") == {"A": "x y", "B": "it's", "C": "'open"}
+
+
+def test_scrub_api_key_env_also_removes_auth_token_and_base_url():
+    # AUTH_TOKEN 은 인증 순서에서 구독 OAuth 보다 앞서고, BASE_URL 은 요청을 다른 곳으로 보낼 수 있다.
+    environ = {"ANTHROPIC_AUTH_TOKEN": "x", "ANTHROPIC_BASE_URL": "http://proxy", "PATH": "p"}
+    assert scrub_api_key_env(environ) is True
+    assert environ == {"PATH": "p"}
+
+
+def test_scrub_llm_env_removes_auth_and_parent_claude_session_vars():
+    # Claude Code(데스크톱 미리보기, 터미널 패널) 안에서 서버를 띄우면 부모 세션 변수가 따라온다.
+    environ = {
+        "ANTHROPIC_API_KEY": "x", "ANTHROPIC_AUTH_TOKEN": "x", "ANTHROPIC_BASE_URL": "x",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "x", "CLAUDECODE": "1", "CLAUDE_CODE_SIMPLE": "1",
+        "CLAUDE_CODE_SESSION_ID": "s", "CLAUDE_CODE_MESSAGING_SOCKET": "m", "CLAUDE_EFFORT": "high",
+        "CLAUDE_AGENT_SDK_VERSION": "v",
+        "CLAUDE_CODE_OAUTH_TOKEN": "keep", "CLAUDE_CODE_GIT_BASH_PATH": "keep", "CLAUDE_CONFIG_DIR": "keep",
+        "PATH": "p", "TEMP": "t",
+    }
+    removed = scrub_llm_env(environ)
+    assert sorted(removed) == sorted([
+        "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "CLAUDECODE", "CLAUDE_CODE_SIMPLE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_EFFORT", "CLAUDE_AGENT_SDK_VERSION"])
+    assert environ == {"CLAUDE_CODE_OAUTH_TOKEN": "keep", "CLAUDE_CODE_GIT_BASH_PATH": "keep",
+                       "CLAUDE_CONFIG_DIR": "keep", "PATH": "p", "TEMP": "t"}
+    assert scrub_llm_env(environ) == []
 
 
 def test_scrub_api_key_env_reports_false_when_nothing_to_remove():
