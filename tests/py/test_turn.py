@@ -148,6 +148,21 @@ def test_session_log_written(tmp_path):
     assert not any("audio" in k for k in keys) and "asr" not in keys and "engine" not in keys
 
 
+@pytest.mark.parametrize("alts", [["hello chomp"], []])  # LLM 턴과 템플릿(조용함) 턴
+@pytest.mark.parametrize("asked", [True, False])
+def test_turn_log_records_hint_requested(tmp_path, alts, asked):
+    # 스펙 4장: (?) 를 누른 것은 다음 턴 요청의 hint_requested:true 로 실려 기록된다
+    orch = make_orch(FakeLLM(['{"say":"Hi!"}']), tmp_path); orch.start_session("s1")
+    list(orch.handle(req("s1", 1, alts, hint_requested=asked)))
+    assert log_events(tmp_path, "s1")[-1]["hint_requested"] is asked
+
+
+def test_hint_requested_must_be_exactly_true(tmp_path):
+    orch = make_orch(FakeLLM(['{"say":"Hi!"}']), tmp_path); orch.start_session("s1")
+    list(orch.handle(req("s1", 1, ["hello"], hint_requested="yes")))
+    assert log_events(tmp_path, "s1")[-1]["hint_requested"] is False
+
+
 # ---------------------------------------------------------------- 답 줄의 모양
 
 

@@ -32,8 +32,9 @@
 
 bank/catalog 가 None 이면 M1 과 똑같다(1줄은 언제나 ack, ops 는 모두 버린다).
 
-개인정보: 로그의 turn 줄에는 turn_id, heard, source, say, ops(2줄), latency 와, 있을 때만 fast_ops(1줄)·fastpath(exact/partial)·
-error(예외 클래스 이름)·issues(검증기가 고친 내역)를 쓴다. LLM 오류 메시지 글은 쓰지 않는다(아이 말이 섞일 수 있다).
+개인정보: 로그의 turn 줄에는 turn_id, heard, source, say, ops(2줄), latency, hint_requested(아이가 (?) 를 눌렀나)와,
+있을 때만 fast_ops(1줄)·fastpath(exact/partial)·error(예외 클래스 이름)·issues(검증기가 고친 내역)를 쓴다.
+LLM 오류 메시지 글은 쓰지 않는다(아이 말이 섞일 수 있다).
 오디오와 음성인식 엔진 정보는 쓰지 않는다.
 """
 from __future__ import annotations
@@ -385,6 +386,7 @@ class TurnOrchestrator:
             "say": redact(answer.reply["say"]),  # LLM 이 아이 말을 따라 했을 수 있다
             "ops": answer.reply["ops"],
             "latency": latency,
+            "hint_requested": turn.hint_requested,  # 스펙 4장: (?) 를 누른 것은 다음 턴에 기록된다
         }
         if plan.ops:
             event["fast_ops"] = plan.ops
