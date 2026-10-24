@@ -25,6 +25,42 @@ def test_normalize_cases(raw, expected):
     assert normalize(raw) == expected
 
 
+# 단어장 accept 의 물건 자리 표시 `{object}` 는 normalize 를 지나도 남는다(Task 10, 결정 R2). 그래야
+# accept[0] == normalize(en) 이 "Throw out the {object}" 에도 성립한다. 중괄호는 이 토큰일 때만 남는다.
+@pytest.mark.parametrize("raw, expected", [
+    ("Throw out the {object}!", "throw out the {object}"),
+    ("Chomp the {object}", "chomp the {object}"),
+    ("  KICK   {Object} ", "kick {object}"),       # 대소문자는 보통 글자처럼 소문자로
+    ("kick the{object}", "kick the {object}"),     # 앞뒤가 붙어 있어도 따로 센다(원래 괄호는 띄어쓰기였다)
+    ("{object}, please!", "{object} please"),
+    ("put on your {object}{object}", "put on your {object} {object}"),
+    ("｛object｝", "{object}"),                       # 전각 괄호도 NFKC 를 거쳐 같은 토큰
+    ("{object}", "{object}"),
+])
+def test_normalize_keeps_the_object_placeholder(raw, expected):
+    assert normalize(raw) == expected
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("{foo} bar", "foo bar"),                      # 다른 중괄호 말은 전과 같이 구두점
+    ("{object", "object"),
+    ("object}", "object"),
+    ("(object)", "object"),
+    ("[object]", "object"),
+    ("{ object }", "object"),
+    ("{objects}", "objects"),
+    ("{object }", "object"),
+])
+def test_normalize_still_strips_every_other_brace(raw, expected):
+    assert normalize(raw) == expected
+
+
+def test_normalize_is_idempotent_with_the_placeholder():
+    for raw in ("Throw out the {object}!", "Chomp the {object}", "Let's clap", "{foo} {object}"):
+        once = normalize(raw)
+        assert normalize(once) == once
+
+
 def test_normalize_non_string_is_empty():
     assert normalize(None) == "" and normalize(3) == ""
 
