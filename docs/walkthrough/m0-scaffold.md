@@ -1,6 +1,6 @@
 # M0 워크스루: 뼈대
 
-- 작성: 2026-10-22
+- 작성: 2026-10-22. 코드 지도의 줄 번호만 2026-10-25(M1 끝, 커밋 `259ea1b`)에 맞춰 고쳤다.
 - 범위: Task 1(프로젝트 골격, 설정, health 서버) + Task 2(미리보기 설정, 문서 뷰어, 이 문서)
 - 함께 볼 문서: [설계 spec](../superpowers/specs/2026-10-22-kids-english-design.md) · [C4 Context](../architecture/c4-context.md) · [ADR 템플릿](../adr/0000-template.md)
 
@@ -32,7 +32,7 @@
 
 ### 2-2. 이 PC의 개발용 설정에 실제로 들어 있는 것
 
-`~/.claude/settings.json`에서 아이 대화와 관계있는 키는 둘이다(값은 2026-10-22 기준).
+`~/.claude/settings.json`(사용자 홈의 `.claude` 폴더)에서 아이 대화와 관계있는 키는 둘이다(값은 2026-10-22 기준).
 
 ```json
 {
@@ -101,7 +101,7 @@
 | 프로젝트 폴더의 파일들 | 작업 폴더를 빈 ASCII 임시 폴더로 | `kids-english/` 안에서 돌지 않으니 읽을 파일이 없다. ASCII인 이유는 경로의 한글·공백 문제를 피하려는 것 |
 | 대화 기록이 남는 것 | `--no-session-persistence` | Claude Code가 세션 기록 파일을 쓰지 않는다 |
 | 여러 턴을 혼자 이어 가는 것 | `max_turns=1`, `permission_mode="dontAsk"` | 한 번 답하고 끝낸다. 허락이 필요한 일은 묻지 않고 거절한다 |
-| 실수로 API 요금 | 서버 시작 때 `ANTHROPIC_API_KEY` 지우기 | 이미 M0에 있다: `run.py:14` |
+| 실수로 API 요금 | 서버 시작 때 `ANTHROPIC_API_KEY` 지우기 | M0부터 있다. M1에서 `ANTHROPIC_*`/`CLAUDE*` 전체로 넓혔다: `run.py:52`, `server/config.py:62` |
 
 추가로 사용자가 `claude setup-token`으로 받은 토큰을 `.env`의 `CLAUDE_CODE_OAUTH_TOKEN`에 넣으면, 그 토큰으로 로그인한다. 이 토큰에는 claude.ai 커넥터가 따라오지 않아서 한 겹 더 안전하다(선택, 사용자가 직접 넣는다).
 
@@ -175,28 +175,30 @@ sequenceDiagram
 
 ## 4. 코드 지도
 
+줄 번호는 M1 끝(커밋 `259ea1b`) 기준이다. M1의 Task 4–6이 `run.py`, `server/config.py`, `server/app.py`를 늘려서 M0 때의 줄에서 옮겨 갔다.
+
 | 위치 | 무엇 |
 |---|---|
-| `run.py:14` | 환경의 `ANTHROPIC_API_KEY`를 지운다. 구독 인증만 쓰기 위한 첫 안전장치 |
-| `run.py:16-18` | 설정 읽기 → 서버 만들기 → 주소 한 줄 출력 |
-| `server/config.py:21` | `Config`. 기본값 127.0.0.1, 8771, haiku, 8초 |
-| `server/config.py:29` | 토큰 필드는 `repr=False`. 설정을 출력해도 토큰이 로그에 남지 않는다 |
-| `server/config.py:73` | `load_config`. 우선순위: 명령줄 > 환경변수 > `.env` > 기본값 |
-| `server/app.py:18` | `STATIC_DIRS`. URL 첫 마디(`js`, `css`, `shared`, `docs`)와 폴더를 짝짓는 표 |
-| `server/app.py:40` | `resolve_static`. 퍼센트 인코딩을 한 번만 풀고, 결과가 그 폴더 안일 때만 파일을 내준다(경로 탈출 차단) |
-| `server/app.py:73` | `/api/health`. `--fake-llm`이면 `"llm": "fake"`, 아니면 `"claude"` |
-| `server/app.py:100` | `Cache-Control: no-store`. 고친 파일이 캐시 때문에 옛 모습으로 보이지 않게 |
-| `server/app.py:107` | Windows에서 `SO_REUSEADDR`를 끈다. 같은 포트에 서버 두 개가 뜨지 않게 |
+| `run.py:52` | 시작할 때 환경변수를 정리한다. 구독 인증만 쓰기 위한 첫 안전장치. M0에서는 `ANTHROPIC_API_KEY` 하나만 지웠고, M1(Task 4)에서 `ANTHROPIC_*`/`CLAUDE*` 전체(남기는 셋 제외)로 넓혔다 |
+| `run.py:56-60` | 설정 읽기 → (M1부터) 턴 처리기 만들기 → 서버 만들기 → 주소 한 줄 출력 |
+| `server/config.py:23` | `Config`. 기본값 127.0.0.1, 8771, haiku, 8초 |
+| `server/config.py:31` | 토큰 필드는 `repr=False`. 설정을 출력해도 토큰이 로그에 남지 않는다 |
+| `server/config.py:104` | `load_config`. 우선순위: 명령줄 > 환경변수 > `.env` > 기본값 |
+| `server/app.py:46` | `STATIC_DIRS`. URL 첫 마디(`js`, `css`, `shared`, `docs`)와 폴더를 짝짓는 표 |
+| `server/app.py:68` | `resolve_static`. 퍼센트 인코딩을 한 번만 풀고, 결과가 그 폴더 안일 때만 파일을 내준다(경로 탈출 차단) |
+| `server/app.py:101` | `/api/health`. `--fake-llm`이면 `"llm": "fake"`, 아니면 `"claude"` |
+| `server/app.py:209` | `Cache-Control: no-store`. 고친 파일이 캐시 때문에 옛 모습으로 보이지 않게 |
+| `server/app.py:223` | Windows에서 `SO_REUSEADDR`를 끈다. 같은 포트에 서버 두 개가 뜨지 않게 |
 | `CLAUDE.md:6-9` | "이 파일을 읽는 Claude는 누구인가". 오늘의 개념이 규칙으로 적힌 곳 |
-| `CLAUDE.md:58` | 외부로 나가는 데이터 세 가지 |
+| `CLAUDE.md:59` | 외부로 나가는 데이터 세 가지 |
 | `.gitignore:3-4` | `data/`, `.env`를 git에서 뺀다 |
 | `.env.example:4` | `CLAUDE_CODE_OAUTH_TOKEN=` 빈칸. 값은 사용자가 직접 넣는다 |
 | `pytest.ini:6` | `-m "not live"`. 실제 Claude를 부르는 테스트는 기본으로 건너뛴다 |
-| `tests/py/test_app.py:17` | health 테스트 |
-| `tests/py/test_app.py:39-50` | 경로 탈출 요청이 모두 404인지 보는 테스트 |
-| `web/js/ndjson.js:13` | `readNdjson`. M1의 `/api/turn` 두 줄 응답을 읽을 함수(미리 만들어 둠) |
+| `tests/py/test_app.py:18` | health 테스트 |
+| `tests/py/test_app.py:40-59` | 경로 탈출 요청이 모두 404인지 보는 테스트(벡터 목록 40–55, 테스트 함수 56–59) |
+| `web/js/ndjson.js:14` | `readNdjson`. M1의 `/api/turn` 두 줄 응답을 읽는 함수. M0에 미리 만들어 두었고, 브라우저에서 처음 쓰는 곳은 `web/js/api.js:47`(M1 Task 7)이다 |
 | `.claude/launch.json` | 미리보기 서버 `kids-english`, 포트 8771 |
-| `docs/index.html:156` | 문서 뷰어의 `DOCS` 배열. 문서를 늘릴 때 여기에 한 줄 더한다 |
+| `docs/index.html:158` | 문서 뷰어의 `DOCS` 배열. 문서를 늘릴 때 여기에 한 줄 더한다 |
 
 ## 5. 직접 해보기
 
@@ -210,7 +212,7 @@ sequenceDiagram
    curl -i --path-as-is http://127.0.0.1:8771/docs/../.env
    ```
    `404`가 나와야 한다. `--path-as-is`를 빼면 curl이 `..`를 먼저 정리해 버려서 시험이 되지 않는다.
-3. **문서 뷰어에 문서 하나 더하기:** `docs/index.html:156`의 `DOCS` 배열에 `{ title: "README", path: "../README.md" }`를 넣어 보면 "열 수 없는 경로"가 뜬다. 뷰어는 `docs/` 안의 파일만 연다. 실험이 끝나면 지운다.
+3. **문서 뷰어에 문서 하나 더하기:** `docs/index.html:158`의 `DOCS` 배열에 `{ title: "README", path: "../README.md" }`를 넣어 보면 "열 수 없는 경로"가 뜬다. 뷰어는 `docs/` 안의 파일만 연다. 실험이 끝나면 지운다.
 4. **오늘의 개념 확인:** `~/.claude/settings.json`을 열어 `outputStyle`과 `enabledPlugins`를 찾아본다. M1에서 `scripts/bench_llm.py`를 돌리면, 이 값들이 아이 대화용 Claude의 `init` 메시지에 **하나도 나오지 않는 것**을 표로 보게 된다.
 5. **테스트 돌리기**
    ```bash
@@ -227,6 +229,6 @@ sequenceDiagram
 
 - `server/llm/`: LLM 어댑터 틀과 `FakeLLM`(Task 3), 격리된 `ClaudeAgentLLM`과 `build_options`, `ISOLATION_ENV`(Task 4). 위 2-4절의 표가 그대로 코드가 된다.
 - `scripts/bench_llm.py`: 격리 점검표와 20턴 지연 p50/p95(Task 4).
-- `/api/turn`: 두 줄짜리 NDJSON 응답(Task 6). `web/js/ndjson.js`가 여기서 처음 쓰인다.
+- `/api/turn`: 두 줄짜리 NDJSON 응답(Task 6). 그 응답을 브라우저에서 읽는 `web/js/ndjson.js`를 처음 쓰는 곳은 `web/js/api.js`(Task 7)다.
 - 화면: 마이크, TTS, 멍멍이, 부모용 `?debug=1`(Task 7).
 - 문서: `c4-container.md`(상자 안 열기), 한 턴 시퀀스 다이어그램, ADR-0001/0002, `m1-walking-skeleton.md`(오늘의 개념: "상주 프로세스와 stream-json")(Task 8).

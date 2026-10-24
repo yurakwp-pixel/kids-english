@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>kids-english 문서</title>
+  <link rel="icon" href="data:,">
   <!--
     개발 문서 뷰어. 부모(개발자)용 페이지라 CDN을 쓴다. 아이 화면(web/)은 CDN을 쓰지 않는다.
     서버(run.py)가 /docs/ 에서 이 파일을 내주고, 아래 DOCS 의 path 는 /docs/ 기준 상대 경로다.
@@ -160,8 +161,13 @@
       { title: "벤치마크: 알레프키즈", path: "benchmark/aleph-kids.html" },
       { title: "벤치마크: 슈니비니", path: "benchmark/shunibini.md" },
       { title: "C4 Context (시스템과 바깥)", path: "architecture/c4-context.md" },
+      { title: "C4 Container (상자 안)", path: "architecture/c4-container.md" },
+      { title: "한 턴 시퀀스 (M1)", path: "sequences/turn-m1.md" },
       { title: "M0 워크스루: 뼈대", path: "walkthrough/m0-scaffold.md" },
+      { title: "M1 워크스루: 걷는 뼈대", path: "walkthrough/m1-walking-skeleton.md" },
       { title: "ADR 템플릿", path: "adr/0000-template.md" },
+      { title: "ADR-0001: 로컬 Claude를 SDK로 상주", path: "adr/0001-local-claude-via-agent-sdk.md" },
+      { title: "ADR-0002: stdlib 서버와 LLM 액터", path: "adr/0002-stdlib-server-and-llm-actor.md" },
     ];
 
     const listEl = document.getElementById("doc-list");
