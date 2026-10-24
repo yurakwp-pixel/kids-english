@@ -122,7 +122,7 @@ HTTP 스레드가 SDK를 직접 부를 수는 없다. 턴마다 `asyncio.run()`�
 
 ### 2-5. 한 턴이 HTTP 선 위에서 보이는 모양: NDJSON 두 줄
 
-서버와 `claude.exe` 사이가 stream-json이라면, 브라우저와 서버 사이는 **NDJSON**(줄마다 JSON 하나)이다. 같은 생각을 한 번 더 쓴 것이다. 아래는 `--fake-llm` 서버에 보낸 실제 응답이다(2026-10-25).
+서버와 `claude.exe` 사이가 stream-json이라면, 브라우저와 서버 사이는 **NDJSON**(줄마다 JSON 하나)이다. 같은 생각을 한 번 더 쓴 것이다. 아래는 `--fake-llm` 서버에 보낸 실제 응답이다(2026-10-25, M1 서버). (M2) 지금 서버에 같은 요청("hello chomp", 새 세션)을 보내면 1줄이 `ack`가 아니라 `fast`다. 자세한 것은 5절 1번.
 
 ```text
 HTTP/1.0 200 OK
@@ -135,7 +135,7 @@ Cache-Control: no-store
 
 - **1줄 `ack`은 LLM을 부르기 전에 나간다.** 턴 처리기가 제너레이터라서 `yield` 한 번이면 된다(`server/turn.py:256`). (M2) 이 자리의 1줄은 fastpath가 맞으면 장면을 바꾸는 `fast` 줄이 된다. 핸들러가 그 줄을 바로 쓰고 `flush`한다(`server/app.py:177`, `:185`–`187`). 브라우저는 이 줄로 "서버가 받았다"를 안다. 실측 11–16 ms다.
 - **2줄 `reply`는 답이 정해진 뒤에 나간다**(`server/turn.py:266`).
-  - `source`는 `llm`(Claude의 답을 검증기가 통과시킴), `template`(들린 말이 없어 LLM을 안 부름), `fallback`(시간 초과·오류·JSON 아님) 중 하나다.
+  - `source`는 `llm`(Claude의 답을 검증기가 통과시킴), `template`(들린 말이 없어 LLM을 안 부름), `fallback`(시간 초과·오류·JSON 아님) 중 하나다. (M2) 말이 단어장 표현과 exact로 맞은 턴도 LLM을 부르지 않고 `template`이다(`server/turn.py:297`–`299`).
   - `latency.llm_ms`는 서버가 잰 LLM 시간이다. `total_ms`는 요청을 받은 때부터다.
 - **끝 신호:** HTTP/1.0이라 본문 길이를 미리 말하지 않는다. 서버가 연결을 닫으면 그것이 끝이다.
 - **브라우저 쪽:**
@@ -288,11 +288,13 @@ flowchart TB
      -d '{"session_id":"try_m1","turn_id":1,"asr":{"alternatives":[{"t":"hello chomp"}]},"scene":[]}'
    ```
    - 두 줄이 나온다: `ack`, 그다음 `reply`.
-   - `alternatives`를 `[]`로 바꾸면 `"source": "template"`, `"llm_ms": null`이 된다. LLM을 부르지 않은 것이다.
+   - (M2) 지금 서버에서는 1줄이 `{"kind": "fast", ..., "ops": [hatch, act chomp bark]}`다. "hello chomp"가 단어장 `hello`의 partial 표현이고(`content/words/level1_social.json:2`, `accept[2]`), 세션의 첫 영어 한마디라 알 부화도 함께 실리기 때문이다. 2줄은 여전히 `"source": "llm"`이다(partial은 LLM이 바른 문장을 다시 말해 준다). 같은 세션에서 다시 "hello chomp"를 보내면 1줄은 `fast [act chomp bark]`다. M1처럼 `ack`를 보려면 같은 세션의 다음 턴에 단어장에 없는 말(예: "what is your name", `turn_id` 2)을 보낸다. 2026-10-25 `--fake-llm` 서버로 넷 다 확인했다.
+   - `alternatives`를 `[]`로 바꾸면 `"source": "template"`, `"llm_ms": null`이 된다. LLM을 부르지 않은 것이다. (M2에서도 같다: 1줄 `ack`, 2줄 `template`.)
    - 끝나면 서버를 끄고 `data/sessions/try_m1.jsonl`을 지운다(연습용 기록).
 2. **ack가 먼저 오는 것을 시간으로 보기** (실제 Claude, 1턴)
    - 미리보기 `kids-english`를 켜고 `http://127.0.0.1:8771/?debug=1`을 연다.
    - "hello chomp"를 넣고 Enter를 누른다. 디버그 패널의 줄 목록에 `ack`이 10 ms대, `reply`가 1.5–4초대로 찍힌다.
+   - (M2) 지금은 "hello chomp"의 1줄이 `ack` 대신 `fast`다(첫 턴이면 알 부화도 함께, 위 1번). 1줄이 LLM보다 먼저 온다는 점은 같다(Task 15 실측 fast 55–72 ms). `ack` 줄 자체를 보려면 알이 깨진 뒤에 단어장에 없는 말(예: "what is your name")을 넣는다. 그러면 실제 Claude를 2턴 쓴다.
    - 두 숫자의 차이가 곧 "Claude가 생각한 시간"이다.
 3. **`claude.exe`가 상주하는지 보기**
    - 2번 화면을 연 채로 PowerShell에서 실행한다.

@@ -304,7 +304,7 @@ flowchart TB
 | `kick ball` | 장면은 바로 바뀌고, 2줄에서 "Kick the ball! Your turn!" 같은 리캐스트 | 부름 |
 | `big red egg` / `red big egg` | 둘 다 큰 빨간 알. 앞은 exact(template), 뒤는 partial(LLM 리캐스트) | 앞: 안 부름 |
 | `ten eggs` | 알 5개("Five eggs!"). 개수는 5로 잘린다 | 안 부름 |
-| `throw out the egg` / `throw out the eggs` | 알이 여러 개일 때 앞은 가장 최근 것 하나, 뒤는 전부 | 안 부름 |
+| `throw out the egg` / `throw out the eggs` | 알이 여러 개일 때 앞은 가장 최근 것 하나, 뒤는 가장 최근 것부터 최대 3개(동작 1개 + 치우기 3개 = 한 턴 4개 한도). 알이 5개면 egg5, egg4, egg3만 사라진다 | 안 부름 |
 | `chomp the egg, chomp the apple` | 첫 후보는 음식이 아니라 건너뛰고 둘째 후보로 사과를 문다 | 안 부름 |
 | `Hey Chomp, jump!` / `dino jump` | 둘 다 멍멍이가 뛴다(공룡은 jump를 못 한다) | 안 부름 |
 | `빨간 알` | 1줄 `ack`, 장면 그대로, "Red egg? Say: red egg!", `ops: []` | 부름 |
