@@ -171,6 +171,13 @@ function opAct(scene, op, cat) {
   }
   state.state = action;
   if (action === "put_on") wear(scene, actor, op.target, cat);
+  if (actor === "chomp" && action === "chomp") eat(scene, op.target, cat);
+}
+
+/** 멍멍이가 문 음식은 사라진다. 서버의 chomp 는 add 와 act 만 보내고 remove 는 보내지 않으므로 지우는 곳은 여기뿐이다. 음식이 아니거나 없는 대상이면 아무 일도 없다. */
+function eat(scene, target, cat) {
+  const item = findItem(scene, target);
+  if (item && objectDef(cat, item.kind)?.food === true) dropItems(scene, new Set([item.id]));
 }
 
 function wear(scene, actor, target, cat) {

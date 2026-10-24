@@ -220,6 +220,60 @@ test("put_on does not wear things that are not wearable or not there, and never 
   assert.equal(item(s, "ball1").worn_by, undefined);
 });
 
+test("chomp eats its food target: the food is gone from items and the wire, Chomp's state is chomp", () => {
+  const s = applyOps(initialScene(), [add("apple", "apple1"), add("cookie", "cookie1"), { op: "act", actor: "chomp", action: "chomp", target: "apple1" }], CAT);
+  assert.equal(item(s, "apple1"), undefined);
+  assert.ok(item(s, "cookie1"), "only the target is eaten");
+  assert.equal(s.actors.chomp.state, "chomp");
+  assert.equal(toWire(s).some((entry) => entry.id === "apple1"), false);
+});
+
+test("chomp on something that is not food, or acting on food any other way, eats nothing", () => {
+  const s = applyOps(initialScene(), [
+    add("ball", "ball1"), add("apple", "apple1"),
+    { op: "act", actor: "chomp", action: "chomp", target: "ball1" },
+    { op: "act", actor: "chomp", action: "bark", target: "apple1" },
+    { op: "act", actor: "dino", action: "kick", target: "apple1" },
+    { op: "act", actor: "dino", action: "chomp", target: "apple1" }, // the dino has no chomp action
+  ], CAT);
+  assert.ok(item(s, "ball1") && item(s, "apple1"));
+  assert.deepEqual(ids(s), ["nest1", "egg1", "ball1", "apple1"]);
+});
+
+test("chomp with a missing or unknown target changes only Chomp's state", () => {
+  const base = applyOps(initialScene(), [add("apple", "apple1")], CAT);
+  for (const target of [undefined, null, "ghost", "dino", "chomp", 7, {}]) {
+    const s = applyOps(base, [{ op: "act", actor: "chomp", action: "chomp", ...(target === undefined ? {} : { target }) }], CAT);
+    assert.deepEqual(s.items, base.items, String(target));
+    assert.equal(s.actors.chomp.state, "chomp", String(target));
+  }
+});
+
+test("eating food frees what sat on it: the place that pointed at the food is dropped", () => {
+  const s = applyOps(initialScene(), [
+    add("banana", "banana1"),
+    add("ball", "ball1", { place: { rel: "on", ref: "banana1" } }),
+    add("ball", "ball2", { place: { rel: "next_to", ref: "nest1" } }),
+    { op: "act", actor: "chomp", action: "chomp", target: "banana1" },
+  ], CAT);
+  assert.equal(item(s, "banana1"), undefined);
+  assert.deepEqual(item(s, "ball1"), { id: "ball1", kind: "ball" });
+  assert.deepEqual(item(s, "ball2").place, { rel: "next_to", ref: "nest1" });
+});
+
+test("eaten food does not pile up toward the cap, and eating stays pure", () => {
+  let s = initialScene();
+  for (let i = 1; i <= 30; i += 1) {
+    s = applyOps(s, [add("apple", `apple${i}`), { op: "act", actor: "chomp", action: "chomp", target: `apple${i}` }], CAT);
+  }
+  assert.deepEqual(ids(s), ["nest1", "egg1"]);
+  const frozen = deepFreeze(applyOps(initialScene(), [add("apple", "apple1"), add("ball", "ball1", { place: { rel: "on", ref: "apple1" } })], CAT));
+  const eaten = applyOps(frozen, deepFreeze([{ op: "act", actor: "chomp", action: "chomp", target: "apple1" }]), CAT);
+  assert.ok(item(frozen, "apple1"), "the input scene still has its apple");
+  assert.deepEqual(item(frozen, "ball1").place, { rel: "on", ref: "apple1" });
+  assert.equal(item(eaten, "apple1"), undefined);
+});
+
 test("remove deletes an item; unknown targets and actors are ignored", () => {
   const s = applyOps(initialScene(), [add("ball", "ball1"), { op: "remove", target: "ball1" }, { op: "remove", target: "ball1" }, { op: "remove", target: "dino" }, { op: "remove", target: "chomp" }, { op: "remove" }], CAT);
   assert.deepEqual(ids(s), ["nest1", "egg1"]);
