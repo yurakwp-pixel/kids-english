@@ -1,7 +1,7 @@
 # M1 워크스루: 걷는 뼈대
 
 - 작성: 2026-10-25 (M1 끝, 커밋 `259ea1b` 기준)
-- 줄 번호: M2 끝(커밋 `37952d8`)의 실제 줄로 다시 맞췄다(Task 16). M2가 `server/turn.py`, `web/js/main.js` 같은 파일을 늘려서 M1 때의 줄에서 옮겨 갔기 때문이다. 설명은 M1 때의 동작이고, M2에서 달라진 곳은 그 자리에 "(M2)"로 적었다.
+- 줄 번호: M2 끝(커밋 `37952d8`)의 실제 줄로 다시 맞췄다(Task 16). M2가 `server/turn.py`, `web/js/main.js` 같은 파일을 늘려서 M1 때의 줄에서 옮겨 갔기 때문이다. 설명은 M1 때의 동작이고, M2에서 달라진 곳은 그 자리에 "(M2)"로 적었다. 최종 리뷰 수정 뒤(커밋 `fea7dc3`) 바뀐 파일의 줄을 한 번 더 맞췄다.
 - 범위:
   - Task 3: LLM 어댑터 틀, `FakeLLM`
   - Task 4: `ClaudeAgentLLM`, 격리, bench
@@ -53,7 +53,7 @@ Task 4 bench(2026-10-24, 20턴)의 실제 숫자다.
 
 - 상주시키면 아이가 기다리는 시간은 p50 약 1.9초다.
 - 턴마다 부르면 연결 0.7~2.0초가 매번 더해져 약 2.6~3.9초가 된다(위 숫자로 계산). spec G1의 p50 목표 2.5초를 넘는다.
-- 연결 비용을 "아이가 말할 때"에서 "화면을 열 때"로 옮기는 것이 핵심이다. 그래서 화면은 열리자마자 세션부터 연다(`web/js/main.js:67`). 서버는 `claude.exe`를 띄우기 **시작만** 하고 5 ms 만에 답한다(`server/llm/claude_agent.py:386`–`400`).
+- 연결 비용을 "아이가 말할 때"에서 "화면을 열 때"로 옮기는 것이 핵심이다. 그래서 화면은 열리자마자 세션부터 연다(`web/js/main.js:68`). 서버는 `claude.exe`를 띄우기 **시작만** 하고 5 ms 만에 답한다(`server/llm/claude_agent.py:386`–`400`).
 - 세션의 첫 턴이 느린 것(3.8초)은 아직 남아 있다. Task 7에서도 화면을 다시 연 지 4초 안에 말한 첫 턴이 3756 ms였고, 그다음 턴들은 1.5–2.0초였다.
 
 ### 2-3. stream-json: 줄 하나가 메시지 하나
@@ -113,11 +113,11 @@ HTTP 스레드가 SDK를 직접 부를 수는 없다. 턴마다 `asyncio.run()`�
 5. **스톱워치를 든 채 문 앞에서 기다리기.** `run_coroutine_threadsafe`는 HTTP 스레드 쪽에서 기다릴 수 있는 `concurrent.futures.Future`를 돌려준다. `complete()`는 `.result(timeout=8.0)`으로 막혀 기다린다(`:424`). 8초가 지나면 그만 기다리고 시간 초과를 낸다(아래 2-6).
 6. 액터가 답을 future에 넣으면(`:273`) HTTP 스레드가 깨어나 `LLMResult`를 돌려준다(`:435`).
 
-턴 처리기(`server/turn.py:303`)는 이 모든 것을 모른다. `self.llm.complete(message, self.timeout_s)`라는 보통 함수 하나만 부른다. `FakeLLM`도 같은 모양이라서, 테스트는 가짜를 꽂아 스레드와 asyncio 없이 턴 처리 전부를 시험한다.
+턴 처리기(`server/turn.py:311`)는 이 모든 것을 모른다. `self.llm.complete(message, self.timeout_s)`라는 보통 함수 하나만 부른다. `FakeLLM`도 같은 모양이라서, 테스트는 가짜를 꽂아 스레드와 asyncio 없이 턴 처리 전부를 시험한다.
 
 **겹치지 않게 하는 세 겹:**
 - 화면: 생각·말하는 중에는 리듀서가 🎤 탭을 무시한다(`web/js/ui_state.js:48`). 그사이 들어온 최종 인식 결과도 새 턴을 열지 않는다(`:58`).
-- 서버: 턴 처리기의 잠금이 턴을 하나씩만 들인다(`server/turn.py:253`).
+- 서버: 턴 처리기의 잠금이 턴을 하나씩만 들인다(`server/turn.py:260`).
 - 액터: 큐가 한 줄로 세운다.
 
 ### 2-5. 한 턴이 HTTP 선 위에서 보이는 모양: NDJSON 두 줄
@@ -133,15 +133,15 @@ Cache-Control: no-store
 {"kind": "reply", "turn_id": 1, "source": "llm", "say": "Good job! I'm Chomp. Let's play!", "recast": null, "choice": null, "korean_hint": "\uac19\uc774 \ub180\uc790! \u2192 Let's play!", "ops": [], "mood": null, "utterance": {"lang": "en", "words_used": [], "errors": []}, "latency": {"llm_ms": 0, "total_ms": 0}}
 ```
 
-- **1줄 `ack`은 LLM을 부르기 전에 나간다.** 턴 처리기가 제너레이터라서 `yield` 한 번이면 된다(`server/turn.py:256`). (M2) 이 자리의 1줄은 fastpath가 맞으면 장면을 바꾸는 `fast` 줄이 된다. 핸들러가 그 줄을 바로 쓰고 `flush`한다(`server/app.py:177`, `:185`–`187`). 브라우저는 이 줄로 "서버가 받았다"를 안다. 실측 11–16 ms다.
-- **2줄 `reply`는 답이 정해진 뒤에 나간다**(`server/turn.py:266`).
-  - `source`는 `llm`(Claude의 답을 검증기가 통과시킴), `template`(들린 말이 없어 LLM을 안 부름), `fallback`(시간 초과·오류·JSON 아님) 중 하나다. (M2) 말이 단어장 표현과 exact로 맞은 턴도 LLM을 부르지 않고 `template`이다(`server/turn.py:297`–`299`).
+- **1줄 `ack`은 LLM을 부르기 전에 나간다.** 턴 처리기가 제너레이터라서 `yield` 한 번이면 된다(`server/turn.py:264`). (M2) 이 자리의 1줄은 fastpath가 맞으면 장면을 바꾸는 `fast` 줄이 된다. 핸들러가 그 줄을 바로 쓰고 `flush`한다(`server/app.py:177`, `:185`–`187`). 브라우저는 이 줄로 "서버가 받았다"를 안다. 실측 11–16 ms다.
+- **2줄 `reply`는 답이 정해진 뒤에 나간다**(`server/turn.py:274`).
+  - `source`는 `llm`(Claude의 답을 검증기가 통과시킴), `template`(들린 말이 없어 LLM을 안 부름), `fallback`(시간 초과·오류·JSON 아님) 중 하나다. (M2) 말이 단어장 표현과 exact로 맞은 턴도 LLM을 부르지 않고 `template`이다(`server/turn.py:305`–`307`).
   - `latency.llm_ms`는 서버가 잰 LLM 시간이다. `total_ms`는 요청을 받은 때부터다.
 - **끝 신호:** HTTP/1.0이라 본문 길이를 미리 말하지 않는다. 서버가 연결을 닫으면 그것이 끝이다.
 - **브라우저 쪽:**
   - `readNdjson`이 받은 바이트를 줄 단위로 끊어 하나씩 `JSON.parse`한다. 한글처럼 여러 바이트인 글자가 조각 경계에서 잘려도 이어 붙인다(`web/js/ndjson.js:14`, `:27`).
   - `sendTurn`이 줄마다 `onLine`을 부른다(`web/js/api.js:57`).
-  - `main.js`가 줄 종류에 따라 리듀서에 이벤트를 보낸다(`web/js/main.js:213`–`227`). (M2) `fast` 줄의 ops는 연출기로, reply 줄은 장면 연출이 시작된 뒤 리듀서로 간다.
+  - `main.js`가 줄 종류에 따라 리듀서에 이벤트를 보낸다(`web/js/main.js:216`–`231`). (M2) `fast` 줄의 ops는 연출기로, reply 줄은 장면 연출이 시작된 뒤 리듀서로 간다.
 - 한글이 `\uac19`처럼 보이는 것은 줄을 ASCII로만 쓰기 때문이다(`server/app.py:35`–`37`). 짝 없는 서로게이트 같은 이상한 글자가 와도 쓰기가 실패하지 않는다.
 
 ### 2-6. 8초가 넘으면: 기다림만 버리고, 줄은 끝까지 읽는다
@@ -154,7 +154,7 @@ Cache-Control: no-store
    - 아직 큐에 줄 서 있던 턴이면 액터가 보내지도 않고 건너뛴다(`:255`–`256`).
    - 이미 보내는 중이면 `client.interrupt()`로 Claude에게 그만하라고 한다(`:330`–`333`).
 4. 액터는 그 턴의 `result` 줄까지 읽어 버린다. 그래서 다음 턴의 stream이 어긋나지 않는다. live 테스트가 진짜 CLI에서 이것을 확인했다(0.05초 시간 초과 → 다음 턴 정상 답).
-5. 턴 처리기는 `LLMTimeout`을 받고 준비된 대사로 답한다(`server/turn.py:304`–`310`). 아이에게는 "Hmm! Let's try that again!" 같은 말이 나간다.
+5. 턴 처리기는 `LLMTimeout`을 받고 준비된 대사로 답한다(`server/turn.py:312`–`318`). 아이에게는 "Hmm! Let's try that again!" 같은 말이 나간다.
 
 ### 2-7. M1에서 실제로 부딪힌 것: "막았다고 믿지 말고 확인한다"
 
@@ -232,29 +232,29 @@ flowchart TB
 
 | 위치 | 무엇 |
 |---|---|
-| `server/turn.py:1-35` | 흐름 설명: 요청 검사 → 잠금 → 1줄(M1은 언제나 ack) → implicit start → 답 → reply. (M2) 1줄을 정하는 단계가 더해졌다 |
-| `server/turn.py:63` | `redact`: 비밀 단어 가리기 자리(M3까지는 그대로 돌려준다) |
-| `server/turn.py:131-153` | `parse_turn_request`: 후보 5개까지, 정리, 군소리("uh", "um") 빼기, 가리기. (M2) 한국어 판정을 가리기 전에(`:147`–`148`) |
-| `server/turn.py:191` | 턴과 세션 시작·끝을 하나씩 들이는 잠금 |
-| `server/turn.py:226-236` | `_start`: LLM 세션을 연다(연결은 기다리지 않음). 실패해도 놀이는 이어진다 |
-| `server/turn.py:249-266` | `handle`: 1줄(`:256`) → 처음 보는 세션이면 연다(`:258`–`259`) → 답(`:262`) → 2줄 reply(`:266`) |
-| `server/turn.py:294-318` | `_ask`: 들린 말이 없으면 template(`:295`–`296`), LLM 호출(`:303`), 실패면 fallback(`:304`–`310`), 파싱·검증(`:311`–`314`). (M2) fastpath exact면 LLM 없이 template(`:297`–`299`) |
-| `server/turn.py:373-391` | `_log_turn`: 로그에는 가린 글자와 예외 **클래스 이름**만 쓴다 |
+| `server/turn.py:1-40` | 흐름 설명: 요청 검사 → 잠금 → 1줄(M1은 언제나 ack) → implicit start → 답 → reply. (M2) 1줄을 정하는 단계가 더해졌다 |
+| `server/turn.py:68` | `redact`: 비밀 단어 가리기 자리(M3까지는 그대로 돌려준다) |
+| `server/turn.py:137-160` | `parse_turn_request`: 후보 5개까지, 정리, 군소리("uh", "um") 빼기, 가리기. (M2) 한국어 판정을 가리기 전에(`:153`–`154`) |
+| `server/turn.py:198` | 턴과 세션 시작·끝을 하나씩 들이는 잠금 |
+| `server/turn.py:233-243` | `_start`: LLM 세션을 연다(연결은 기다리지 않음). 실패해도 놀이는 이어진다 |
+| `server/turn.py:256-274` | `handle`: 1줄(`:264`) → 처음 보는 세션이면 연다(`:266`–`267`) → 답(`:270`) → 2줄 reply(`:274`) |
+| `server/turn.py:302-328` | `_ask`: 들린 말이 없으면 template(`:303`–`304`), LLM 호출(`:311`), 실패면 fallback(`:312`–`318`), 파싱·검증(`:319`–`322`). (M2) fastpath exact면 LLM 없이 template(`:305`–`307`) |
+| `server/turn.py:384-403` | `_log_turn`: 로그에는 가린 글자와 예외 **클래스 이름**만 쓴다 |
 
 ### `web/js/main.js` (화면 배선)
 
 | 위치 | 무엇 |
 |---|---|
 | `web/js/main.js:1-9` | 한 턴의 흐름 설명 |
-| `web/js/main.js:54-64` | TTS와 마이크 만들기. 최종 결과는 `MIC_RESULT`로(`:58`) |
-| `web/js/main.js:67` | 화면을 열자마자 세션을 연다. 연결 비용을 첫 말 전에 낸다(2-2) |
-| `web/js/main.js:69-78` | `?debug=1`일 때만 디버그 패널. 글자 턴의 엔진은 `debug-text` |
-| `web/js/main.js:114-121` | `dispatch`: 리듀서 → 그리기 → 부수 효과 |
-| `web/js/main.js:125-148` | `runEffects`: listening이 되면 마이크(`:126`–`134`, (M2) 12초 감시 포함), thinking이 되면 턴 보내기(`:136`–`139`), speaking이 되면 입 움직이며 말하기(`:140`–`146`) |
-| `web/js/main.js:169-176` | `startMouth`: 200 ms마다 입 여닫기. 동작 줄이기 설정이면 움직이지 않는다 |
-| `web/js/main.js:193-236` | `runTurn`: 요청 만들기(`:202`–`208`. M1은 `scene: []`, (M2) 지금은 `toWire(director.flush())`), 줄마다 처리(`:210`–`229`), reply가 없으면 화면이 대신 답한다(`:235`) |
-| `web/js/main.js:245-256` | `wake`: 첫 클릭에서 소리와 말하기를 깨운다 |
-| `web/js/main.js:283-291` | 🎤 `pointerup` → `TAP_MIC`(`:291`). (M2) (?) 버튼도 같은 `onTap`을 쓴다 |
+| `web/js/main.js:55-65` | TTS와 마이크 만들기. 최종 결과는 `MIC_RESULT`로(`:59`) |
+| `web/js/main.js:68` | 화면을 열자마자 세션을 연다. 연결 비용을 첫 말 전에 낸다(2-2) |
+| `web/js/main.js:70-79` | `?debug=1`일 때만 디버그 패널. 글자 턴의 엔진은 `debug-text` |
+| `web/js/main.js:115-125` | `dispatch`: 리듀서 → 그리기 → 부수 효과 |
+| `web/js/main.js:129-152` | `runEffects`: listening이 되면 마이크(`:130`–`138`, (M2) 12초 감시 포함), thinking이 되면 턴 보내기(`:140`–`143`), speaking이 되면 입 움직이며 말하기(`:144`–`150`) |
+| `web/js/main.js:173-180` | `startMouth`: 200 ms마다 입 여닫기. 동작 줄이기 설정이면 움직이지 않는다 |
+| `web/js/main.js:197-244` | `runTurn`: 요청 만들기(`:205`–`211`. M1은 `scene: []`, (M2) 지금은 `toWire(director.flush())`), 줄마다 처리(`:213`–`233`), reply가 없거나 답을 보이다 오류가 나면 화면이 대신 답한다(`:239`–`243`, `web/js/turn_end.js`) |
+| `web/js/main.js:253-264` | `wake`: 첫 클릭에서 소리와 말하기를 깨운다 |
+| `web/js/main.js:291-299` | 🎤 `pointerup` → `TAP_MIC`(`:299`). (M2) (?) 버튼도 같은 `onTap`을 쓴다 |
 
 ### 그 밖에 이번에 생긴 곳
 
@@ -274,7 +274,7 @@ flowchart TB
 | `web/js/tts.js:7` | `pickVoice`: en-US Online (Natural) Ana → 다른 Natural → en-US → en-*. 없으면 조용히 자막만 |
 | `scripts/bench_llm.py:115` | bench 본체: 환경 정리, 옵션 출력, 턴별 지연, 격리 점검표, p50/p95 |
 | `tests/py/test_claude_agent_options.py:33` | 격리 옵션 계약 테스트(쿼터 0) |
-| `tests/py/test_api_turn.py:86` | ack가 LLM보다 먼저 도착하는지 보는 시간 테스트 |
+| `tests/py/test_api_turn.py:88` | ack가 LLM보다 먼저 도착하는지 보는 시간 테스트 |
 
 ## 5. 직접 해보기
 
@@ -311,7 +311,7 @@ flowchart TB
    ```
    가짜 `ClaudeSDKClient`로 "8초 넘음 → interrupt → 다음 턴은 정상", "줄 서 있다 포기한 턴은 보내지 않음"을 시험한다.
 5. **잠금을 빼면 무엇이 깨지나** (생각 실험)
-   - `server/turn.py:253`의 `with self._lock:`이 없다고 해 보자. 두 턴이 동시에 LLM을 부른다.
+   - `server/turn.py:260`의 `with self._lock:`이 없다고 해 보자. 두 턴이 동시에 LLM을 부른다.
    - Task 6에서 실제로 잠금을 빼 보았더니 `test_turns_are_serialized`가 `assert 2 == 1`로 실패했다.
 6. **격리 점검표 다시 보기** (실제 Claude, 쿼터 사용)
    ```bash
@@ -343,12 +343,12 @@ flowchart TB
 M1을 끝낼 때 적은 계획이다. 결과는 [M2 워크스루](m2-speak-to-build.md)에 있고, 줄 번호는 지금(M2 끝) 줄이다.
 
 - **카탈로그와 단어장**(Task 9, 10): `shared/catalog.json`, `content/words/*.json`.
-  - 시스템 프롬프트의 `{VOCAB}`, `{CATALOG}`가 "(none yet)" 대신 실제 내용으로 채워진다(Task 13, `server/turn.py:200`–`203`).
+  - 시스템 프롬프트의 `{VOCAB}`, `{CATALOG}`가 "(none yet)" 대신 실제 내용으로 채워진다(Task 13, `server/turn.py:207`–`210`).
 - **fastpath**(Task 11, 13): 단어장 표현과 정확히 맞으면 LLM을 부르지 않는다.
   - 1줄이 `{"kind":"fast","ops":[...]}`가 되어 장면이 0.5초 안에 바뀐다(실측 55–72 ms).
-  - 1줄을 계산하는 곳은 M1에서 ack를 내던 자리, 같은 잠금 안이다(`server/turn.py:255`–`256`).
+  - 1줄을 계산하는 곳은 M1에서 ack를 내던 자리, 같은 잠금 안이다(`server/turn.py:263`–`264`).
 - **검증기**(Task 12): M1은 LLM이 낸 `ops`를 모두 버렸다. 이제 카탈로그로 검사해서 맞는 것만 남긴다([ADR-0003](../adr/0003-turn-contract-and-catalog.md)).
 - **화면**(Task 14, 15): 장면 모델·배치·그리기(`web/js/scene/model.js`, `layout.js`, `render.js`)가 생겼다.
-  - `main.js`가 `fast` 줄의 `ops`를 장면에 바로 적용한다(M1 때는 리듀서에 알리기만 했다. 지금은 `web/js/main.js:215`–`218`).
-  - 턴 요청의 `scene: []`가 실제 놀이판 상태가 됐다(`web/js/main.js:207`).
+  - `main.js`가 `fast` 줄의 `ops`를 장면에 바로 적용한다(M1 때는 리듀서에 알리기만 했다. 지금은 `web/js/main.js:218`–`221`).
+  - 턴 요청의 `scene: []`가 실제 놀이판 상태가 됐다(`web/js/main.js:210`).
 - **문서**(Task 16): [C4 Component](../architecture/c4-component-server.md), [fastpath 시퀀스](../sequences/turn-fastpath-m2.md), ADR-0003·0004, [M2 워크스루](m2-speak-to-build.md)(오늘의 개념: "결정적 렌더링").

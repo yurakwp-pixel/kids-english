@@ -4,7 +4,7 @@
 **Date:** 2026-10-25 (방향은 2026-10-22 spec 5.2에서 정했고, 숫자는 2026-10-24 Task 4 bench에서 쟀다)
 **Deciders:** 부모(개발자). 설계 spec 5.2, 구현과 측정 Task 4, 요금 지킴이 Task 6
 
-줄 번호는 M2 끝(커밋 `37952d8`)의 실제 줄로 다시 맞췄다(Task 16). `server/llm/claude_agent.py`와 `server/config.py`는 M1 뒤로 바뀌지 않았다.
+줄 번호는 M2 끝(커밋 `37952d8`)의 실제 줄로 다시 맞췄다(Task 16). `server/llm/claude_agent.py`와 `server/config.py`는 M1 뒤로 바뀌지 않았다. 최종 리뷰 수정 뒤(커밋 `fea7dc3`) 바뀐 파일의 줄을 한 번 더 맞췄다.
 
 > 한 줄로: `claude.exe` 하나를 세션 동안 띄워 두고, 턴마다 stream-json 한 줄을 보낸다. 그 `claude.exe`는 이 PC의 개발용 설정을 하나도 보지 못하게 막고, 정말 막혔는지 세션 시작 정보(`init`)로 확인한다.
 
@@ -173,13 +173,13 @@ claude.exe --output-format stream-json --verbose
   - 그 뒤의 `start_session`은 `claude.exe`를 다시 띄우지 않는다(`:392`–`393`).
   - `complete`는 질의를 보내지 않고 바로 `LLMBillingRefused`를 낸다(`:411`–`412`).
   - 아이에게는 준비된 대사가 나간다.
-  - 서버 콘솔에는 정해진 한 줄 "LLM refused: API-key billing (subscription only; fix auth, restart)"이 찍힌다. 세션 로그에는 클래스 이름 `LLMBillingRefused`만 남는다(`server/turn.py:306`–`307`).
+  - 서버 콘솔에는 정해진 한 줄 "LLM refused: API-key billing (subscription only; fix auth, restart)"이 찍힌다. 세션 로그에는 클래스 이름 `LLMBillingRefused`만 남는다(`server/turn.py:314`–`315`).
   - 다시 쓰려면 인증을 고치고 서버를 다시 켠다. 새 객체가 `init`을 새로 판정한다.
   - Task 6 첫 구현에서는 거부가 새 세션마다 풀렸다. 그래서 페이지를 다시 열 때마다 유료 질의가 하나씩 나갈 수 있었고, 리뷰에서 고쳤다(`f1a69db`).
 - **한계:**
   - `init`은 턴의 응답 맨 앞에 온다. 그래서 첫 질의는 출처를 알기 전에 이미 나간다. 유료 질의는 **서버를 켤 때마다 많아야 한 번**이다.
   - 실제로는 환경변수 정리가 `ANTHROPIC_API_KEY`를 먼저 지우고 `.env`가 구독 토큰을 주므로, 지킴이는 두 번째 방어선이다.
-- 테스트: `tests/py/test_claude_agent_options.py:341`, `:363`, `tests/py/test_turn.py:279`.
+- 테스트: `tests/py/test_claude_agent_options.py:341`, `:363`, `tests/py/test_turn.py:294`.
 
 ## bench 결과 (Task 4, 2026-10-24)
 

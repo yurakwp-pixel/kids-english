@@ -1,6 +1,6 @@
 # M2 워크스루: 말로 짓기
 
-- 작성: 2026-10-25 (커밋 `37952d8` 기준. 아래 줄 번호는 모두 이 커밋의 실제 줄이다)
+- 작성: 2026-10-25 (M2 끝, 커밋 `37952d8`). 최종 리뷰 수정 뒤 다시 맞췄다: **아래 줄 번호는 모두 커밋 `fea7dc3`의 실제 줄이다.**
 - 범위:
   - Task 9: 카탈로그 `shared/catalog.json`
   - Task 10: 단어장 45개와 로더
@@ -10,6 +10,7 @@
   - Task 14: 장면 모델, 배치, 공룡 포즈(순수 함수)
   - Task 15: 놀이판 그리기, 연출, (?) 힌트
   - Task 16: 이 문서들
+  - 최종 리뷰 수정(2026-10-25): 서버를 다시 켜도 부화를 또 하지 않기(2-4절), 단어 한 줄을 더해도 테스트가 그대로 통과(5절 1번), 로그에 `hint_requested`, partial 턴의 못 쓸 `say`는 바른 문장으로, 턴이 "생각 중"에 갇히지 않기(`web/js/turn_end.js`), 메모장 BOM 단어장 읽기, 말 앞뒤의 "um"/"uh" 떼기, 끊긴 연결의 잠금 테스트
 - 함께 볼 문서: [C4 Component(서버 안)](../architecture/c4-component-server.md) · [한 턴 시퀀스(M2)](../sequences/turn-fastpath-m2.md) · [ADR-0003 턴 계약과 카탈로그](../adr/0003-turn-contract-and-catalog.md) · [ADR-0004 fastpath](../adr/0004-fastpath.md) · [M1 워크스루](m1-walking-skeleton.md)
 
 ---
@@ -30,7 +31,7 @@
   - LLM은 그림을 만들지 않는다. 카탈로그에 적힌 이름으로 된 짧은 조작(ops)만 낸다. 그림은 우리 SVG뿐이다.
   - 검증기가 카탈로그 밖의 것, 음식이 아닌 것 물기, 캐릭터 차기, "wrong"이 든 문장을 걸러 낸다. 한 턴 ops는 4개, 장면 물건은 20개까지다.
 - **오늘의 개념:** 장면 모델과 배치는 **순수 함수**다. 같은 장면이면 언제 어디서 계산해도 같은 그림이다. 그래서 node에서 시험하고, 서버와 화면이 어긋나지 않는다.
-- **테스트:** Python 1133개, JS 180개.
+- **테스트:** Python 1161개, JS 190개(M2 끝에는 1133개, 180개였고 최종 리뷰 수정이 더했다).
 - **아직 없는 것(M3):** "Did you say X or Y?", 한국어 도움 버튼(ko-KR 인식), 따라 말하기 보상, 비밀 단어 가리기, quiz/dialogue 단어.
 
 ## 2. 오늘의 개념: 결정적 렌더링, "같은 상태면 같은 그림"
@@ -88,13 +89,13 @@
 | 누가 | 무엇을 기억하나 | 어디서 |
 |---|---|---|
 | 화면 | 장면 전체(물건, 캐릭터 상태, 표정, 입은 것) | 연출기의 `current`(`web/js/scene/director.js:51`) |
-| 서버 | 세션 id, 턴 수, "알이 깨졌나" 하나 | `server/turn.py:192`–`194` |
+| 서버 | 세션 id, 턴 수, "알이 깨졌나" 하나(화면이 `hatched: true`라고 하면 그 말이 앞선다) | `server/turn.py:199`–`201` |
 
 한 턴은 이렇게 돈다.
 
-1. 화면이 지금 장면을 요청에 싣는다. `scene: toWire(director.flush())`(`web/js/main.js:207`). `flush()`는 아직 연출 중인 단계와 쉬는 자세까지 지금 다 적용한 **최종** 장면을 돌려준다(`web/js/scene/director.js:117`–`133`).
-2. 서버는 그 장면으로 fastpath를 돌린다. "kick the ball"의 대상은 **그 장면에서** 가장 최근의 공이다(`server/fastpath.py:331`–`336`). 공이 없으면 **그 장면의** 가장 큰 번호 + 1로 새 id를 정한다(`server/ids.py:16`–`30`).
-3. LLM의 ops도 **같은 장면**으로 검사한다(`server/turn.py:312`–`314`). 장면에 없는 대상을 가리키는 op는 버려진다.
+1. 화면이 지금 장면을 요청에 싣는다. `scene: toWire(director.flush())`(`web/js/main.js:210`). `flush()`는 아직 연출 중인 단계와 쉬는 자세까지 지금 다 적용한 **최종** 장면을 돌려준다(`web/js/scene/director.js:117`–`133`). 공룡 줄에는 깨어났는지(`hatched`)도 실린다(`web/js/scene/model.js:56`).
+2. 서버는 그 장면으로 fastpath를 돌린다. "kick the ball"의 대상은 **그 장면에서** 가장 최근의 공이다(`server/fastpath.py:348`–`353`). 공이 없으면 **그 장면의** 가장 큰 번호 + 1로 새 id를 정한다(`server/ids.py:23`–`37`).
+3. LLM의 ops도 **같은 장면**으로 검사한다(`server/turn.py:320`–`322`). 장면에 없는 대상을 가리키는 op는 버려진다.
 4. 화면은 서버가 정한 id를 **그대로** 쓴다(`web/js/scene/model.js:124`–`136`). 서버가 "ball1을 차라"고 검사한 그 `ball1`이 화면의 그 공이다.
 
 그리고 같은 규칙을 **양쪽이 따로 한 번씩** 지킨다. 서버가 놓친 것이 있어도 화면 모델이 한 번 더 걸러서, 화면이 깨지지 않는다.
@@ -108,7 +109,12 @@
 | `put_on`은 입을 수 있는 것만 | `:420`–`421` | `:183`–`189` |
 | 장면 물건은 20개까지 | `:257`–`258`(적기만 함) | `:273`–`287`(오래된 것부터 치움) |
 
-**서버가 기억하는 유일한 것, 부화**도 어긋나지 않게 했다. 서버를 다시 켜면 서버는 "아직 안 깨졌다"고 생각하고 `hatch`를 또 보낸다. 화면의 `hatch`는 이미 깨어 있으면 아무것도 하지 않는다(`web/js/scene/model.js:164`–`166`). 그래서 아이가 나중에 만든 `egg1`이 지워지지 않는다(`tests/js/model.test.mjs:177`).
+**서버가 기억하는 유일한 것, 부화**도 화면의 말을 따른다. 이것은 최종 리뷰에서 고친 곳이라, 무엇이 틀렸었는지가 이 절의 개념을 잘 보여 준다.
+
+- **전에는:** 서버는 자기 기억("이 세션에서 알이 깨졌나")만으로 부화를 정했다. 단어장을 고치고 서버를 다시 켜면(README가 시키는 일) 기억이 비어서, 열린 화면의 다음 영어 턴에 `hatch`를 또 보냈다. 화면의 `hatch`는 이미 깨어 있으면 아무것도 하지 않으니(`web/js/scene/model.js:164`–`166`, `tests/js/model.test.mjs:177`) **화면은** 괜찮았다.
+- **그런데 서버의 계산이 어긋났다.** 서버는 부화 턴마다 `egg1`(둥지 알)을 지운 장면으로 fastpath와 검증기를 돌린다. 부화 뒤에 아이가 만든 첫 알도 `egg1`이다(그 장면의 가장 큰 번호 + 1, `server/ids.py:7`–`14`). 그래서 빨간 `egg1`이 있는 화면에서 "kick the egg"는 `[hatch, add egg2, kick egg2]`가 됐고(새 알을 하나 더 만들어 찼다), "throw out the egg"는 아무것도 치우지 않았다. 화면과 서버가 **같은 장면을 보지 않은** 것이다.
+- **지금은:** 장면의 공룡 줄이 `"hatched": true`면 서버는 부화하지 않고, 이 세션을 부화한 것으로 기억한다(`server/turn.py:159`, `:263`, `:268`–`269`). 서버를 다시 켜도 `egg1`은 아이의 알 그대로 fastpath와 검증기의 대상이 된다(`tests/py/test_turn_m2.py:264`–`308`).
+- **배울 점:** "장면은 화면 한 곳에만 있다"는 원칙을 서버의 작은 기억 하나가 깨고 있었다. 화면이 이미 아는 것(공룡이 깨어났다)은 서버가 따로 기억하지 말고 화면에게서 받는다. 서버의 기억은 화면이 말해 주지 않을 때(예: `hatched` 없이 보내는 테스트)의 대비일 뿐이다.
 
 ### 2-5. 연출(director)은 결정성을 깨지 않는다
 
@@ -117,13 +123,13 @@
 - **`stageOps`는 순서를 바꾸지 않고 자르기만 한다**(`web/js/scene/director.js:33`–`43`). `hatch`는 혼자, 이어진 `add`들은 한 단계, 이어진 나머지(`act`, `set`, `move`, `remove`)도 한 단계다. 단계 사이 기다림은 부화 1100 ms, 물건 450 ms, 동작 800 ms다(`:15`–`17`).
 - **단계마다 똑같이 `applyOps`를 부른다**(`web/js/scene/director.js:63`–`71`). 그래서 단계로 나눠 적용한 끝 장면은 한꺼번에 적용한 장면과 같다. 2026-10-25에 세 가지 줄(부화+공+차기 / 사과+덥석+알 둘+지우기 / 양말+신기+표정+옮기기)로 node에서 확인했다: 둘이 `deepEqual`이다.
 - **"쉬는 자세로 돌아가기"도 op다.** 동작이 끝나면 연출기가 `{op:"act", actor, action:"idle"}`을 `applyOps`로 적용한다(`:73`–`80`, 기다림은 동작마다 `:20`–`21`). 시간이 하는 일은 **언제** 적용하느냐뿐이고, **무엇을** 적용하느냐는 op에 다 적혀 있다.
-- **다음 턴 요청 전에 `flush()`** 로 남은 단계를 다 적용한다(`web/js/main.js:207`). 그래서 서버는 연출이 어디까지 왔는지와 관계없이 언제나 "다 끝난 장면"을 받는다.
+- **다음 턴 요청 전에 `flush()`** 로 남은 단계를 다 적용한다(`web/js/main.js:210`). 그래서 서버는 연출이 어디까지 왔는지와 관계없이 언제나 "다 끝난 장면"을 받는다.
 - **한 번만 하는 움직임은 장면 상태가 아니다.** 퐁 생기기, 흔들기, 덥석 달려들기는 `render.js`가 `.fx` 그룹에 거는 애니메이션이다(`web/js/scene/render.js:6`–`7`). 자리와 크기를 정하는 transform과는 다른 그룹이라 서로 덮어쓰지 않는다. 동작 줄이기 설정이면 이 움직임을 건너뛰지만(`:35`, `:167`) 끝 그림은 같다.
 
 ### 2-6. 그래서 무엇을 얻었나
 
 - **브라우저 없이 시험한다.** 장면 모델, 배치, 연출, 그리기 계산의 테스트가 `node --test`로 1초 안에 돈다(JS 180개).
-- **다시 그릴 수 있다.** 세션 기록에는 턴마다 1줄 ops(`fast_ops`)와 2줄 ops(`ops`)가 남는다(`server/turn.py:380`, `:383`–`384`). 처음 장면에서 그 ops를 차례로 적용하면 그 세션의 장면을 그대로 다시 만들 수 있다. 디버그 패널도 실제로 적용된 ops를 어느 줄에서 왔는지(`fast`, `reply`, `local`)와 함께 보여 준다(`web/js/debug.js:1`–`5`).
+- **다시 그릴 수 있다.** 세션 기록에는 턴마다 1줄 ops(`fast_ops`)와 2줄 ops(`ops`)가 남는다(`server/turn.py:391`, `:395`–`396`). 처음 장면에서 그 ops를 차례로 적용하면 그 세션의 장면을 그대로 다시 만들 수 있다. 디버그 패널도 실제로 적용된 ops를 어느 줄에서 왔는지(`fast`, `reply`, `local`)와 함께 보여 준다(`web/js/debug.js:1`–`5`).
 - **버그가 어디 있는지 좁혀진다.** 그림이 이상하면 (1) ops가 이상한가(서버), (2) 장면이 이상한가(`applyOps`), (3) 자리가 이상한가(`layout`), (4) 그리기가 이상한가(`render`) 중 하나다. 앞의 셋은 node에서 바로 재현된다.
 
 > **한 줄로:** 서버는 기보(ops)만 보내고, 화면은 판(장면)을 쥐고 규칙(`applyOps`)대로 돌을 놓고, 판을 보고 자리(`layout`)를 정한다. 규칙과 자리 정하기에 시계도 난수도 없으니, 같은 판에 같은 수를 두면 누가 언제 두어도 같은 그림이다. 시간은 "언제 보여 줄까"만 정한다.
@@ -175,34 +181,36 @@ flowchart TB
 
 | 위치 | 무엇 |
 |---|---|
-| `server/turn.py:1`–`35` | 흐름 설명: 요청 검사 → 잠금 → 1줄(부화, fastpath) → 2줄(템플릿 또는 LLM) |
-| `server/turn.py:59`–`60` | `HATCH_OP`, `HATCH_EGG = "egg1"` |
-| `server/turn.py:100`–`103` | 1줄: ops가 있으면 `fast`, 없으면 `ack` |
-| `server/turn.py:105`–`113` | 검증기에 줄 "이미 적용한 ops". 부화가 `egg1`을 지운다는 것을 적어 넣는다 |
-| `server/turn.py:147`–`148` | 한국어 판정은 가리기(`redact`) 전에 |
-| `server/turn.py:249`–`266` | `handle`: 잠금 → 1줄 yield(`:256`) → 세션 열기 → 부화 표시(`:260`–`261`) → 2줄(`:266`) |
-| `server/turn.py:268`–`276` | `_plan`: 부화 + fastpath, 4개 한도 |
-| `server/turn.py:294`–`318` | `_ask`: exact면 템플릿(`:297`–`299`), 아니면 LLM과 검증 |
-| `server/turn.py:320`–`329` | 2줄 ops: LLM의 `hatch` 빼기, 1줄과 합쳐 4개 |
-| `server/turn.py:339`–`363` | 템플릿 답과 `korean_hint`("공을 차 → Kick the ball!") |
+| `server/turn.py:1`–`40` | 흐름 설명: 요청 검사 → 잠금 → 1줄(부화, fastpath) → 2줄(템플릿 또는 LLM) |
+| `server/turn.py:64`–`65` | `HATCH_OP`, `HATCH_EGG = "egg1"` |
+| `server/turn.py:106`–`109` | 1줄: ops가 있으면 `fast`, 없으면 `ack` |
+| `server/turn.py:111`–`119` | 검증기에 줄 "이미 적용한 ops". 부화가 `egg1`을 지운다는 것을 적어 넣는다 |
+| `server/turn.py:153`–`154` | 한국어 판정은 가리기(`redact`) 전에 |
+| `server/turn.py:159` | 화면이 보낸 공룡 줄의 `"hatched": true` 읽기 |
+| `server/turn.py:256`–`274` | `handle`: 잠금 → 부화했나(화면의 말 또는 서버 기억, `:263`) → 1줄 yield(`:264`) → 세션 열기 → 부화 표시(`:268`–`269`) → 2줄(`:274`) |
+| `server/turn.py:276`–`284` | `_plan`: 부화 + fastpath, 4개 한도 |
+| `server/turn.py:302`–`328` | `_ask`: exact면 템플릿(`:305`–`307`), 아니면 LLM과 검증. partial인데 `say`를 통째로 못 쓰면 fastpath의 바른 문장(`:325`–`326`) |
+| `server/turn.py:330`–`339` | 2줄 ops: LLM의 `hatch` 빼기, 1줄과 합쳐 4개 |
+| `server/turn.py:350`–`374` | 템플릿 답과 `korean_hint`("공을 차 → Kick the ball!") |
+| `server/turn.py:384`–`403` | 로그의 turn 줄. (?)를 누르고 온 턴이면 `hint_requested: true`(`:393`) |
 
 ### 서버: fastpath, id, 검증기, 프롬프트
 
 | 위치 | 무엇 |
 |---|---|
-| `server/fastpath.py:1`–`19` | 문법 두 개와 판정 규칙 설명 |
-| `server/fastpath.py:93`–`111` | `match`: n-best를 앞에서부터, 처음 맞는 후보 |
-| `server/fastpath.py:124`–`157` | `_Grammar`: 레벨 이하 단어로 문장·틀·물건·꾸밈말 표 만들기 |
-| `server/fastpath.py:249`–`268` | 단어 문장: exact는 `accept[0]`(`:255`) 또는 관사 틀 + 바른 순서(`:266`) |
-| `server/fastpath.py:271`–`313` | `_present`: 동작과 물건 잇기, 음식만 물기(`:292`–`293`), 단수면 하나만 치우기(`:310`–`311`) |
-| `server/ids.py:16`–`30` | `next_ids`: 종류 + 가장 큰 번호 + 1 |
+| `server/fastpath.py:1`–`23` | 문법 두 개와 판정 규칙 설명 |
+| `server/fastpath.py:97`–`118` | `match`: n-best를 앞에서부터, 처음 맞는 후보. 통째로 안 맞으면 앞뒤 군소리를 떼고 한 번 더(`:112`–`114`, `_without_fillers` `:131`) |
+| `server/fastpath.py:141`–`174` | `_Grammar`: 레벨 이하 단어로 문장·틀·물건·꾸밈말 표 만들기 |
+| `server/fastpath.py:266`–`285` | 단어 문장: exact는 `accept[0]`(`:272`) 또는 관사 틀 + 바른 순서(`:283`) |
+| `server/fastpath.py:288`–`330` | `_present`: 동작과 물건 잇기, 음식만 물기(`:309`–`310`), 단수면 하나만 치우기(`:327`–`328`) |
+| `server/ids.py:23`–`37` | `next_ids`: 종류 + 가장 큰 번호 + 1 |
 | `server/reply.py:165`–`177` | ops를 통째로 버리는 경우: 한글 입력, `lang:"ko"`, `say` 교체, 카탈로그 없음 |
 | `server/reply.py:199`–`455` | `_OpsChecker`: op 하나씩 카탈로그·장면·안전 규칙으로 검사하고 새 dict로 다시 만들기 |
 | `server/reply.py:63`–`67` | "wrong"/"incorrect" 걸러내기, 캐릭터를 차거나 내던지지 않기 |
 | `server/prompt_builder.py:38`–`50` | `word_sentence`: "Throw out the {object}" → "Throw out" |
 | `server/prompt_builder.py:63`–`85` | `vocab_lines`(`English \| 한국어 \| id`), `catalog_summary` |
 | `server/catalog.py:39`, `:83` | `Catalog`(읽기 전용), `load_catalog`(틀리면 서버가 안 뜬다) |
-| `server/words.py:54`, `:67`, `:103` | `Word`, `WordBank`, `load_words`(파일·단어·키를 담은 오류) |
+| `server/words.py:54`, `:67`, `:103` | `Word`, `WordBank`, `load_words`(파일·단어·키를 담은 오류). 메모장의 BOM도 읽는다(`:132`) |
 | `server/text.py:31`–`43` | `normalize`: "Let's dance!" → "lets dance", `{object}`는 남긴다 |
 | `run.py:56`–`57` | 서버를 켤 때 카탈로그와 단어장을 읽는다 |
 
@@ -220,7 +228,7 @@ flowchart TB
 | `prompts/chomp_system.md:31`–`37` | `{VOCAB}`, `{CATALOG}` 자리 |
 | `prompts/chomp_system.md:39`–`49` | LLM이 쓸 수 있는 op 모양과 id 규칙 |
 | `prompts/chomp_system.md:52` | "No code fences, no explanations, no HTML, no SVG." |
-| `prompts/chomp_system.md:64`–`75` | 예시 셋(partial 리캐스트, 한국어, LLM이 ops를 내는 경우). 테스트가 셋 다 검증기를 통과하는지 본다(`tests/py/test_turn_m2.py:471`) |
+| `prompts/chomp_system.md:64`–`75` | 예시 셋(partial 리캐스트, 한국어, LLM이 ops를 내는 경우). 테스트가 셋 다 검증기를 통과하는지 본다(`tests/py/test_turn_m2.py:541`) |
 
 ### 화면: 장면 (`web/js/scene/`)
 
@@ -246,10 +254,12 @@ flowchart TB
 
 | 위치 | 무엇 |
 |---|---|
-| `web/js/main.js:84`–`102` | 연출기 만들기, 카탈로그 받기(`:90`–`97`), 그리기(`:100`–`102`) |
-| `web/js/main.js:193`–`236` | `runTurn`: 요청(`:202`–`208`), fast 줄(`:215`–`218`), reply 줄(`:219`–`227`), 대체 대사(`:235`) |
-| `web/js/main.js:105`–`109` | reply의 `mood`를 장면의 `set` op로(표정도 장면에 있어야 다음 턴에 서버가 안다) |
-| `web/js/main.js:292` | (?) 버튼 → `TAP_HINT`(서버를 부르지 않는다) |
+| `web/js/main.js:85`–`103` | 연출기 만들기, 카탈로그 받기(`:91`–`98`), 그리기(`:101`–`103`) |
+| `web/js/main.js:197`–`244` | `runTurn`: 요청(`:205`–`211`), fast 줄(`:218`–`221`), reply 줄(`:222`–`231`), 대체 대사(`:239`–`243`, `web/js/turn_end.js`) |
+| `web/js/turn_end.js:13`–`18`, `:24`–`39` | `startShowing`, `endTurn`: 답을 보이다 무엇이 throw 해도 턴은 답이나 대체 대사로 끝난다(DOM 없음, `tests/js/turn_end.test.mjs`) |
+| `web/js/main.js:115`–`125` | `dispatch`: 그리기가 throw 해도 전이에 딸린 일(말하기 → `TTS_END`)은 한다 |
+| `web/js/main.js:106`–`110` | reply의 `mood`를 장면의 `set` op로(표정도 장면에 있어야 다음 턴에 서버가 안다) |
+| `web/js/main.js:300` | (?) 버튼 → `TAP_HINT`(서버를 부르지 않는다) |
 | `web/js/ui_state.js:65`–`68` | `TAP_HINT`: 힌트를 보이고, 다음 턴 요청에 `hint_requested: true`(`:61`) |
 
 ## 5. 직접 해보기
@@ -265,14 +275,16 @@ flowchart TB
    ```
 
    - `accept[0]`은 `en`을 정규화한 것과 같아야 하고(`"Cookie"` → `"cookie"`), `ko`에는 한글이 있어야 하고, 다른 단어의 `accept`와 겹치면 안 된다. 어기면 로더가 파일·단어·키 이름을 담은 오류를 낸다.
+   - 메모장으로 고쳐도 된다. "UTF-8(BOM)"으로 저장해도 로더가 읽는다(`server/words.py:132`).
 2. 로더가 받아 주는지 본다.
 
    ```bash
    .venv/Scripts/python -m pytest -q tests/py/test_words.py
    ```
 
-   - **3개가 실패하는 것이 정상이다:** `test_bank_has_exactly_the_table_words`, `test_word_counts_per_level`, `test_objects_map_singular_and_plural_to_the_kind`. 이 테스트들은 단어 45개 표를 그대로 고정해 두었다. 실패 메시지가 "쿠키가 표에 없다"는 것뿐이면 로더는 새 줄을 받아 준 것이다. 진짜로 남길 단어면 `tests/py/test_words.py`의 표(`TABLE`)에도 한 줄 더한다.
-   - 다른 테스트(형식 검사 160여 개)는 통과해야 한다.
+   - **모든 테스트가 그대로 통과해야 한다.** 단어장 테스트는 "표의 45개가 다 있는가"(표 ⊆ 단어장)와 개수 "이상"만 보고, 새 단어 때문에 깨지지 않는다(spec G4). 하나라도 실패하면 새 줄이 규칙을 어긴 것이고, 실패 메시지가 어느 파일의 어느 단어, 어느 키인지 알려 준다.
+   - 2026-10-25에 이 쿠키 줄로, 그리고 메모장처럼 BOM·CRLF로 저장한 새 파일(레벨 1 동작, 레벨 1 색, 레벨 3 물건)로 전체 테스트를 돌려 봤다: 1160개 모두 통과.
+   - 진짜로 남길 단어면 `tests/py/test_words.py`의 표(`TABLE`)에도 한 줄 더하면 그 단어의 모양까지 고정된다. 꼭 해야 하는 일은 아니다.
 3. 서버를 다시 켠다(단어장은 켤 때 한 번 읽는다). 미리보기 `kids-english`를 멈췄다 켜거나, 터미널에서 Ctrl+C 후 `.venv/Scripts/python run.py`.
 4. `http://127.0.0.1:8771/?debug=1`에서 넣어 본다. 2026-10-25에 같은 줄을 넣고 fastpath를 직접 불러 본 결과다(LLM 없이 끝나서 쿼터 0).
 
@@ -302,6 +314,8 @@ flowchart TB
 |---|---|---|
 | `kick the ball` (새로고침 직후 첫 턴) | 알이 흔들리고 깨짐 → 공이 퐁 → 공룡이 찬다. `fast` 줄에 ops 3개, 2줄 `template` | 안 부름 |
 | `kick ball` | 장면은 바로 바뀌고, 2줄에서 "Kick the ball! Your turn!" 같은 리캐스트 | 부름 |
+| `um kick the ball` / `kick the ball uh` | 앞뒤의 군소리를 떼고 `kick the ball`과 똑같이(exact, template). 가운데의 군소리("kick uh the ball")는 떼지 않아 LLM으로 간다 | 안 부름 |
+| (공룡이 깨어난 뒤 `red egg`로 빨간 `egg1`을 만들고) 서버만 멈췄다 다시 켠 다음 `kick the egg` | 부화가 다시 일어나지 않는다. `fast` 줄은 `act dino kick egg1` 하나(아이의 빨간 알을 찬다). 2026-10-25 `--fake-llm` 서버로 확인 | 안 부름 |
 | `big red egg` / `red big egg` | 둘 다 큰 빨간 알. 앞은 exact(template), 뒤는 partial(LLM 리캐스트) | 앞: 안 부름 |
 | `ten eggs` | 알 5개("Five eggs!"). 개수는 5로 잘린다 | 안 부름 |
 | `throw out the egg` / `throw out the eggs` | 알이 여러 개일 때 앞은 가장 최근 것 하나, 뒤는 가장 최근 것부터 최대 3개(동작 1개 + 치우기 3개 = 한 턴 4개 한도). 알이 5개면 egg5, egg4, egg3만 사라진다 | 안 부름 |
@@ -345,7 +359,7 @@ console.log(JSON.stringify(a) === JSON.stringify(b), a.ball1, a.dino);
 node --test tests/js/*.test.mjs
 ```
 
-2026-10-25: Python 1133 passed(실제 Claude를 부르는 live 2개는 기본 제외), JS 180 pass.
+2026-10-25(최종 리뷰 수정 뒤): Python 1161 passed(실제 Claude를 부르는 live 2개는 기본 제외), JS 190 pass. M2 끝에는 1133, 180이었다.
 
 ## 6. 관련 ADR
 
@@ -362,13 +376,13 @@ node --test tests/js/*.test.mjs
 
 ## 7. 다음에 바뀔 것 (M3)
 
-- **지연부터:** `scripts/bench_llm.py`가 서버와 같은 프롬프트를 쓰게 고치고(지금은 단어장·카탈로그 자리가 "(none yet)", `scripts/bench_llm.py:55`–`56`) 20턴을 잰다. 그다음 시스템 프롬프트를 줄인다(지금 9,437자). 그래도 p50이 2.5초를 넘으면 `say`를 먼저 읽는다([ADR-0004](../adr/0004-fastpath.md)).
+- **지연부터:** `scripts/bench_llm.py`가 서버와 같은 프롬프트를 쓰게 고치고(지금은 단어장·카탈로그 자리가 "(none yet)", `scripts/bench_llm.py:55`–`56`) 20턴을 잰다. 그다음 시스템 프롬프트를 줄인다(지금 9,532자. M2 끝 9,437자에 최종 리뷰가 부화 턴 예외 한 문장을 더했다). 그래도 p50이 2.5초를 넘으면 `say`를 먼저 읽는다([ADR-0004](../adr/0004-fastpath.md)).
 - **"Did you say X or Y?"**: 맞지 않는 말이 애매할 때 두 후보로 되묻는다.
 - **한국어 도움 버튼(🇰🇷, ko-KR 인식):** 지금은 디버그 글자 입력으로만 한국어 갈래를 시험한다. 버튼이 생기면 실제 음성에서도 "장면 그대로 + 따라 할 영어"가 된다.
 - **따라 말하기와 부화 보상:** 리캐스트 뒤에 아이가 바른 문장을 말하면 칭찬과 작은 보상.
-- **비밀 단어 가리기:** `redact`(`server/turn.py:63`)가 `data/private/blocklist.txt`의 단어를 실제로 가린다.
+- **비밀 단어 가리기:** `redact`(`server/turn.py:68`)가 `data/private/blocklist.txt`의 단어를 실제로 가린다.
 - **quiz/dialogue 단어 타입:** 단어장 로더가 지금은 거절한다.
 - **알고 남겨 둔 것:**
-  - partial 턴에서 LLM의 `say`가 통째로 못 쓰는 답이면, 장면은 바뀌었는데 "Hmm! Let's try that again!"이 나온다(Task 13에서 확인). fastpath의 바른 문장으로 바꾸는 작은 수정 거리다.
+  - (최종 리뷰에서 고침) partial 턴에서 LLM의 `say`를 통째로 못 쓰면 이제 fastpath의 바른 문장으로 답한다(`server/turn.py:325`–`326`). 남은 것: 부화만 실린 턴(맞는 단어 없이 처음 한 영어)에서 `say`를 못 쓰면 알은 깨졌는데 "Hmm! Let's try that again!"이 나온다. 바른 문장이 없어서다. "Baby Dino is here!" 같은 부화 대사를 따로 둘지 M3에서 본다.
   - `korean_hint`에는 "wrong" 걸러내기가 없다([ADR-0003](../adr/0003-turn-contract-and-catalog.md)).
   - 배치는 장면 순서로 격자를 채워서, 앞의 물건이 지워지면 뒤의 물건들이 한 칸씩 미끄러진다(0.35초 transition).
