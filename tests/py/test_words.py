@@ -127,9 +127,13 @@ def test_the_table_is_what_the_brief_says():
     assert sum(1 for w in TABLE if w["level"] == 1) == 27
 
 
-def test_bank_has_exactly_the_table_words(bank):
-    assert {w.id for w in bank.words} == set(BY_ID)
-    assert len(bank.words) == len(BY_ID)
+# 진짜 단어장은 표의 단어를 모두 갖되, 그보다 많아도 된다: 단어를 더하는 일은 JSON 한 줄을 더하는 일이고(spec G4),
+# 그 한 줄 때문에 테스트를 고칠 일은 없어야 한다. 그래서 아래는 "표 ⊆ 단어장", 개수는 ">=" 로 본다.
+
+
+def test_bank_has_every_table_word(bank):
+    assert set(BY_ID) <= {w.id for w in bank.words}
+    assert len(bank.words) >= len(BY_ID)
 
 
 @pytest.mark.parametrize("expected", TABLE, ids=lambda w: w["id"])
@@ -144,9 +148,9 @@ def test_every_word_matches_the_table(bank, expected):
 
 
 def test_word_counts_per_level(bank):
-    assert len(bank.up_to(1)) == 27
-    assert len(bank.up_to(2)) == 45 == len(bank.words)
-    assert len([w for w in bank.words if w.level == 2]) == 18
+    assert len(bank.up_to(1)) >= 27
+    assert len(bank.up_to(2)) >= 45
+    assert len([w for w in bank.words if w.level == 2]) >= 18
 
 
 def test_accept_zero_is_the_normalized_en(bank):
@@ -189,8 +193,8 @@ def test_korean_meanings_are_short_and_hangul_only(bank):
 def test_sources_and_levels_are_in_range(bank):
     assert {w.source for w in bank.words} <= set(SOURCES) == {"shunibini-A", "shunibini-B", "core"}
     assert all(1 <= w.level <= MAX_LEVEL for w in bank.words)
-    # 슈니비니 카드 문장 16개는 A 또는 B, 멍멍이 명령·인사·색·숫자·물건은 core
-    assert sum(1 for w in bank.words if w.source.startswith("shunibini")) == 16
+    # 슈니비니 카드 문장(표에 16개)은 A 또는 B, 멍멍이 명령·인사·색·숫자·물건은 core
+    assert sum(1 for w in bank.words if w.source.startswith("shunibini")) >= 16
 
 
 def test_chomp_only_ever_bites_food(bank, catalog):
@@ -202,7 +206,7 @@ def test_chomp_only_ever_bites_food(bank, catalog):
 
 def test_word_files_are_utf8_with_one_word_per_line():
     files = sorted(WORDS_DIR.glob("*.json"))
-    assert [f.name for f in files] == ["level1_actions.json", "level1_social.json", "level2_starter.json"]
+    assert {f.name for f in files} >= {"level1_actions.json", "level1_social.json", "level2_starter.json"}
     for f in files:
         text = f.read_bytes().decode("utf-8-sig")  # 메모장이 붙인 BOM 은 괜찮다(로더도 utf-8-sig 로 읽는다)
         entries = json.loads(text)
@@ -219,23 +223,25 @@ def test_up_to_filters_by_level_and_keeps_file_order(bank):
     assert bank.up_to(0) == []
     one = bank.up_to(1)
     assert one and all(w.level == 1 for w in one)
-    assert bank.up_to(2) == list(bank.words)
-    assert bank.up_to(99) == list(bank.words)
+    assert bank.up_to(2) == [w for w in bank.words if w.level <= 2]
+    assert bank.up_to(MAX_LEVEL) == list(bank.words) == bank.up_to(99)
     assert [w.id for w in one] == [w.id for w in bank.words if w.level == 1]
     assert isinstance(one, list)
 
 
 def test_up_to_returns_a_fresh_list(bank):
+    before = len(bank.up_to(1))
     first = bank.up_to(1)
     first.clear()
-    assert len(bank.up_to(1)) == 27
+    assert before and len(bank.up_to(1)) == before
 
 
 def test_attrs_color_size_count(bank):
-    assert bank.attrs("color") == {"red": "red", "blue": "blue", "yellow": "yellow", "green": "green"}
-    assert bank.attrs("size") == {"big": "big", "small": "small", "little": "small"}
+    assert bank.attrs("color").items() >= {"red": "red", "blue": "blue", "yellow": "yellow", "green": "green"}.items()
+    assert bank.attrs("size").items() >= {"big": "big", "small": "small", "little": "small"}.items()
     count = bank.attrs("count")
-    assert count == {"one": 1, "1": 1, "two": 2, "2": 2, "three": 3, "3": 3, "four": 4, "4": 4, "five": 5, "5": 5}
+    assert count.items() >= {"one": 1, "1": 1, "two": 2, "2": 2, "three": 3, "3": 3, "four": 4, "4": 4,
+                             "five": 5, "5": 5}.items()
     assert all(isinstance(v, int) and not isinstance(v, bool) for v in count.values())
 
 
@@ -252,10 +258,10 @@ def test_attrs_and_objects_return_copies(bank):
 
 
 def test_objects_map_singular_and_plural_to_the_kind(bank, catalog):
-    assert bank.objects() == {
+    assert bank.objects().items() >= {
         "egg": "egg", "eggs": "egg", "ball": "ball", "balls": "ball", "tree": "tree", "trees": "tree",
         "socks": "socks", "sock": "socks", "apple": "apple", "apples": "apple",
-    }
+    }.items()
     assert set(bank.objects().values()) <= set(catalog.objects)
 
 
@@ -277,8 +283,9 @@ def test_word_is_frozen_and_hashable(bank):
 
 
 def test_bank_can_be_built_from_words_directly(bank):
-    sub = WordBank(bank.up_to(1))
-    assert len(sub.words) == 27 and sub.attrs("color") == {} and sub.objects() == {}
+    moves = [w for w in bank.words if w.present["type"] in ("act", "mood")]  # 꾸밈말도 물건도 아닌 단어만
+    sub = WordBank(moves)
+    assert len(sub.words) == len(moves) >= 27 and sub.attrs("color") == {} and sub.objects() == {}
     # 손으로 만든 단어의 accept 도 normalize 해서 넣는다
     hand = Word(id="x", en="Red", ko="빨강", accept=("Red!",), level=2, category="color", source="core",
                 present={"type": "attr", "slot": "color", "value": "red"})
