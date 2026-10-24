@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "actors": {
+    "chomp": {
+      "actions": ["jump", "chomp", "bark", "spin", "hide", "sleep"],
+      "faces": ["happy", "excited", "sleepy", "surprised", "sad", "shy"]
+    },
+    "dino": {
+      "actions": [
+        "hatch", "turn_around", "walk", "hide", "kick", "stretch_arms", "fold_arms",
+        "thumbs_up", "climb_up", "yawn", "sneeze", "deep_breath", "clean_up", "throw_out",
+        "put_on", "wash_hands", "go_to_bed", "clap", "dance", "high_five"
+      ],
+      "faces": ["happy", "excited", "sleepy", "surprised", "sad", "shy"]
+    }
+  },
+  "objects": {
+    "egg": { "render": "svg", "color": true, "size": true },
+    "ball": { "render": "svg", "color": true, "size": true },
+    "block": { "render": "svg", "color": true, "size": true },
+    "socks": { "render": "svg", "color": true, "wearable": true },
+    "hat": { "render": "svg", "color": true, "wearable": true },
+    "nest": { "render": "svg" },
+    "tree": { "render": "svg" },
+    "toys": { "render": "emoji", "emoji": "🧸" },
+    "sun": { "render": "emoji", "emoji": "☀️" },
+    "flower": { "render": "emoji", "emoji": "🌼" },
+    "apple": { "render": "emoji", "emoji": "🍎", "food": true },
+    "cookie": { "render": "emoji", "emoji": "🍪", "food": true },
+    "banana": { "render": "emoji", "emoji": "🍌", "food": true }
+  },
+  "colors": ["red", "blue", "yellow", "green", "orange", "purple", "pink", "white"],
+  "sizes": ["small", "big"],
+  "max_count": 5,
+  "zones": ["left", "center", "right", "sky", "ground"],
+  "relations": ["on", "under", "next_to", "in"],
+  "max_ops": 4,
+  "max_items": 20
+}
