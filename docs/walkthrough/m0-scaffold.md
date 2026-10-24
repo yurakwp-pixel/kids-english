@@ -1,6 +1,6 @@
 # M0 워크스루: 뼈대
 
-- 작성: 2026-10-22. 코드 지도의 줄 번호만 2026-10-25(M1 끝, 커밋 `259ea1b`)에 맞춰 고쳤다.
+- 작성: 2026-10-22. 코드 지도의 줄 번호만 2026-10-25(M1 끝, M1 문서 커밋)에 맞춰 고쳤다.
 - 범위: Task 1(프로젝트 골격, 설정, health 서버) + Task 2(미리보기 설정, 문서 뷰어, 이 문서)
 - 함께 볼 문서: [설계 spec](../superpowers/specs/2026-10-22-kids-english-design.md) · [C4 Context](../architecture/c4-context.md) · [ADR 템플릿](../adr/0000-template.md)
 
@@ -175,7 +175,7 @@ sequenceDiagram
 
 ## 4. 코드 지도
 
-줄 번호는 M1 끝(커밋 `259ea1b`) 기준이다. M1의 Task 4–6이 `run.py`, `server/config.py`, `server/app.py`를 늘려서 M0 때의 줄에서 옮겨 갔다.
+줄 번호는 M1 끝(M1 문서 커밋) 기준이다. 코드 파일은 M1 마지막 코드 커밋 `259ea1b`와 같고, `CLAUDE.md`와 `docs/index.html`은 M1 문서 커밋에서 한 줄씩 늘었다. M1의 Task 4–6이 `run.py`, `server/config.py`, `server/app.py`를 늘려서 M0 때의 줄에서 옮겨 갔다.
 
 | 위치 | 무엇 |
 |---|---|
