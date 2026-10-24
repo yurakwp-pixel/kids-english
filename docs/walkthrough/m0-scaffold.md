@@ -1,6 +1,6 @@
 # M0 워크스루: 뼈대
 
-- 작성: 2026-10-22. 코드 지도의 줄 번호만 2026-10-25(M1 끝, M1 문서 커밋)에 맞춰 고쳤다.
+- 작성: 2026-10-22. 코드 지도의 줄 번호만 2026-10-25에 M1 끝(M1 문서 커밋)에 맞춰 한 번, M2 끝(커밋 `37952d8`)에 맞춰 다시 고쳤다.
 - 범위: Task 1(프로젝트 골격, 설정, health 서버) + Task 2(미리보기 설정, 문서 뷰어, 이 문서)
 - 함께 볼 문서: [설계 spec](../superpowers/specs/2026-10-22-kids-english-design.md) · [C4 Context](../architecture/c4-context.md) · [ADR 템플릿](../adr/0000-template.md)
 
@@ -101,7 +101,7 @@
 | 프로젝트 폴더의 파일들 | 작업 폴더를 빈 ASCII 임시 폴더로 | `kids-english/` 안에서 돌지 않으니 읽을 파일이 없다. ASCII인 이유는 경로의 한글·공백 문제를 피하려는 것 |
 | 대화 기록이 남는 것 | `--no-session-persistence` | Claude Code가 세션 기록 파일을 쓰지 않는다 |
 | 여러 턴을 혼자 이어 가는 것 | `max_turns=1`, `permission_mode="dontAsk"` | 한 번 답하고 끝낸다. 허락이 필요한 일은 묻지 않고 거절한다 |
-| 실수로 API 요금 | 서버 시작 때 `ANTHROPIC_API_KEY` 지우기 | M0부터 있다. M1에서 `ANTHROPIC_*`/`CLAUDE*` 전체로 넓혔다: `run.py:52`, `server/config.py:62` |
+| 실수로 API 요금 | 서버 시작 때 `ANTHROPIC_API_KEY` 지우기 | M0부터 있다. M1에서 `ANTHROPIC_*`/`CLAUDE*` 전체로 넓혔다: `run.py:64`, `server/config.py:62` |
 
 추가로 사용자가 `claude setup-token`으로 받은 토큰을 `.env`의 `CLAUDE_CODE_OAUTH_TOKEN`에 넣으면, 그 토큰으로 로그인한다. 이 토큰에는 claude.ai 커넥터가 따라오지 않아서 한 겹 더 안전하다(선택, 사용자가 직접 넣는다).
 
@@ -175,12 +175,12 @@ sequenceDiagram
 
 ## 4. 코드 지도
 
-줄 번호는 M1 끝(M1 문서 커밋) 기준이다. 코드 파일은 M1 마지막 코드 커밋 `259ea1b`와 같고, `CLAUDE.md`와 `docs/index.html`은 M1 문서 커밋에서 한 줄씩 늘었다. M1의 Task 4–6이 `run.py`, `server/config.py`, `server/app.py`를 늘려서 M0 때의 줄에서 옮겨 갔다.
+줄 번호는 M2 끝(커밋 `37952d8`) 기준이다. M1의 Task 4–6이 `run.py`, `server/config.py`, `server/app.py`를 늘렸고, M2의 Task 13이 `run.py`를 한 번 더 늘려서 M0 때의 줄에서 옮겨 갔다. `server/config.py`와 `server/app.py`는 M1 뒤로 바뀌지 않았다.
 
 | 위치 | 무엇 |
 |---|---|
-| `run.py:52` | 시작할 때 환경변수를 정리한다. 구독 인증만 쓰기 위한 첫 안전장치. M0에서는 `ANTHROPIC_API_KEY` 하나만 지웠고, M1(Task 4)에서 `ANTHROPIC_*`/`CLAUDE*` 전체(남기는 셋 제외)로 넓혔다 |
-| `run.py:56-60` | 설정 읽기 → (M1부터) 턴 처리기 만들기 → 서버 만들기 → 주소 한 줄 출력 |
+| `run.py:64` | 시작할 때 환경변수를 정리한다. 구독 인증만 쓰기 위한 첫 안전장치. M0에서는 `ANTHROPIC_API_KEY` 하나만 지웠고, M1(Task 4)에서 `ANTHROPIC_*`/`CLAUDE*` 전체(남기는 셋 제외)로 넓혔다 |
+| `run.py:68-72` | 설정 읽기 → (M1부터) 턴 처리기 만들기 → 서버 만들기 → 주소 한 줄 출력 |
 | `server/config.py:23` | `Config`. 기본값 127.0.0.1, 8771, haiku, 8초 |
 | `server/config.py:31` | 토큰 필드는 `repr=False`. 설정을 출력해도 토큰이 로그에 남지 않는다 |
 | `server/config.py:104` | `load_config`. 우선순위: 명령줄 > 환경변수 > `.env` > 기본값 |
@@ -196,8 +196,8 @@ sequenceDiagram
 | `pytest.ini:6` | `-m "not live"`. 실제 Claude를 부르는 테스트는 기본으로 건너뛴다 |
 | `tests/py/test_app.py:18` | health 테스트 |
 | `tests/py/test_app.py:40-59` | 경로 탈출 요청이 모두 404인지 보는 테스트(벡터 목록 40–55, 테스트 함수 56–59) |
-| `web/js/ndjson.js:14` | `readNdjson`. M1의 `/api/turn` 두 줄 응답을 읽는 함수. M0에 미리 만들어 두었고, 브라우저에서 처음 쓰는 곳은 `web/js/api.js:47`(M1 Task 7)이다 |
-| `.claude/launch.json` | 미리보기 서버 `kids-english`, 포트 8771 |
+| `web/js/ndjson.js:14` | `readNdjson`. M1의 `/api/turn` 두 줄 응답을 읽는 함수. M0에 미리 만들어 두었고, 브라우저에서 처음 쓰는 곳은 `web/js/api.js:57`(M1 Task 7)이다 |
+| `.claude/launch.json` | 미리보기 서버 `kids-english`, 포트 8771. M2부터 `"url": "http://127.0.0.1:8771"`로 연다(`localhost`는 새 연결마다 약 0.3초가 더 든다, [ADR-0004](../adr/0004-fastpath.md)) |
 | `docs/index.html:158` | 문서 뷰어의 `DOCS` 배열. 문서를 늘릴 때 여기에 한 줄 더한다 |
 
 ## 5. 직접 해보기
@@ -223,7 +223,7 @@ sequenceDiagram
 ## 6. 관련 ADR
 
 - M0에는 새 결정 기록이 없다. 형식은 [ADR-0000 템플릿](../adr/0000-template.md)에 있다.
-- 오늘의 개념(격리 옵션 전체와 bench 결과)은 M1의 **ADR-0001** "로컬 Claude Code를 Agent SDK로 부른다"에 기록된다.
+- 오늘의 개념(격리 옵션 전체와 bench 결과)은 M1의 [ADR-0001: 로컬 Claude Code를 Agent SDK로 상주시켜 부른다](../adr/0001-local-claude-via-agent-sdk.md)에 기록했다.
 
 ## 7. 다음에 바뀔 것 (M1: 걷는 뼈대)
 

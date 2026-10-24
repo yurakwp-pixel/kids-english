@@ -4,6 +4,8 @@
 **Date:** 2026-10-25 (방향은 2026-10-22 spec 5.2에서 정했고, 숫자는 2026-10-24 Task 4 bench에서 쟀다)
 **Deciders:** 부모(개발자). 설계 spec 5.2, 구현과 측정 Task 4, 요금 지킴이 Task 6
 
+줄 번호는 M2 끝(커밋 `37952d8`)의 실제 줄로 다시 맞췄다(Task 16). `server/llm/claude_agent.py`와 `server/config.py`는 M1 뒤로 바뀌지 않았다.
+
 > 한 줄로: `claude.exe` 하나를 세션 동안 띄워 두고, 턴마다 stream-json 한 줄을 보낸다. 그 `claude.exe`는 이 PC의 개발용 설정을 하나도 보지 못하게 막고, 정말 막혔는지 세션 시작 정보(`init`)로 확인한다.
 
 ## Context
@@ -130,7 +132,7 @@ claude.exe --output-format stream-json --verbose
 
 ## 환경변수 정리 (`scrub_llm_env`)
 
-- **무엇을:** 서버(`run.py:52`)와 bench가 시작할 때 이름이 `ANTHROPIC_` 또는 `CLAUDE`로 시작하는 변수를 모두 지운다. 지운 **이름만** 출력하고 값은 어디에도 쓰지 않는다(`server/config.py:57`–`70`).
+- **무엇을:** 서버(`run.py:64`)와 bench가 시작할 때 이름이 `ANTHROPIC_` 또는 `CLAUDE`로 시작하는 변수를 모두 지운다. 지운 **이름만** 출력하고 값은 어디에도 쓰지 않는다(`server/config.py:57`–`70`).
 - **남기는 셋**(사용자가 일부러 정하는 값):
   - `CLAUDE_CODE_OAUTH_TOKEN`: 직접 받은 구독 토큰
   - `CLAUDE_CODE_GIT_BASH_PATH`: Windows의 Git Bash 위치
@@ -171,7 +173,7 @@ claude.exe --output-format stream-json --verbose
   - 그 뒤의 `start_session`은 `claude.exe`를 다시 띄우지 않는다(`:392`–`393`).
   - `complete`는 질의를 보내지 않고 바로 `LLMBillingRefused`를 낸다(`:411`–`412`).
   - 아이에게는 준비된 대사가 나간다.
-  - 서버 콘솔에는 정해진 한 줄 "LLM refused: API-key billing (subscription only; fix auth, restart)"이 찍힌다. 세션 로그에는 클래스 이름 `LLMBillingRefused`만 남는다(`server/turn.py:206`–`207`).
+  - 서버 콘솔에는 정해진 한 줄 "LLM refused: API-key billing (subscription only; fix auth, restart)"이 찍힌다. 세션 로그에는 클래스 이름 `LLMBillingRefused`만 남는다(`server/turn.py:306`–`307`).
   - 다시 쓰려면 인증을 고치고 서버를 다시 켠다. 새 객체가 `init`을 새로 판정한다.
   - Task 6 첫 구현에서는 거부가 새 세션마다 풀렸다. 그래서 페이지를 다시 열 때마다 유료 질의가 하나씩 나갈 수 있었고, 리뷰에서 고쳤다(`f1a69db`).
 - **한계:**
@@ -261,6 +263,7 @@ claude.exe --output-format stream-json --verbose
   - SDK나 번들 CLI 버전을 올릴 때: bench를 다시 돌린다(사용자 승인 후, haiku 약 20턴). 격리 점검표가 모두 OK이고 종료 코드가 0인지 확인한다. 숨은 플래그(`--thinking`)와 `@builtin` 이름이 바뀔 수 있다.
   - M4의 15분 세션: 대화가 길어질수록 턴마다 실리는 맥락도 늘어난다. bench 20턴 안에서는 지연이 늘지 않았다(16–20번 1800–1973 ms). 15분 세션에서 다시 잰다.
   - p50이 2.5초를 넘기 시작하면 G1의 대응(fastpath 넓히기, 프롬프트 줄이기, `say` 먼저 읽기)을 고른다.
+    - **M2에서 넘었다**(2026-10-25 미리보기, LLM 턴 5개 p50 2.7초, 최대 3.4초). 시스템 프롬프트가 3,439자에서 9,437자로 늘었다. 고른 대응과 숫자는 [ADR-0004](0004-fastpath.md)의 "LLM 지연"에 있다.
 
 ## Action Items
 

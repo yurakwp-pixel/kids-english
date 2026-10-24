@@ -5,7 +5,8 @@
       "name": "kids-english",
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": ["run.py", "--port", "8771"],
-      "port": 8771
+      "port": 8771,
+      "url": "http://127.0.0.1:8771"
     }
   ]
 }

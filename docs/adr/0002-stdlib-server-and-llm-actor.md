@@ -4,6 +4,8 @@
 **Date:** 2026-10-25 (방향은 2026-10-22 spec 5.3에서 정했고, Task 4·6에서 구현했다)
 **Deciders:** 부모(개발자)
 
+줄 번호는 M2 끝(커밋 `37952d8`)의 실제 줄로 다시 맞췄다(Task 16). `server/llm/claude_agent.py`와 `server/app.py`는 M1 뒤로 바뀌지 않았다.
+
 > 한 줄로: HTTP는 표준 라이브러리 `ThreadingHTTPServer`가 보통 함수(동기)로 처리한다. Claude SDK는 세션마다 전용 스레드 하나가 자기 asyncio 이벤트 루프 안에서 쥔다. 둘 사이는 `run_coroutine_threadsafe`와 큐 하나로 잇는다.
 
 ## Context
@@ -29,10 +31,10 @@
 3. **다리:** HTTP 스레드의 `ClaudeAgentLLM.complete()`(`:410`).
    - `asyncio.run_coroutine_threadsafe(s.submit(turn), s.loop)`로 루프에 일을 맡긴다(`:191`–`197`, `:420`). `submit`이 future를 만들어 큐에 넣는다(`:323`–`328`).
    - 그 결과를 `concurrent.futures.Future.result(timeout=8.0)`으로 기다린다(`:424`).
-4. **직렬화는 두 겹이다.**
-   - 서버 쪽: `TurnOrchestrator`의 `threading.Lock`이 턴, 세션 시작, 세션 끝을 하나씩만 들인다(`server/turn.py:121`, `:180`).
+4. **직렬화는 세 겹이다.**
+   - 서버 쪽: `TurnOrchestrator`의 `threading.Lock`이 턴, 세션 시작, 세션 끝을 하나씩만 들인다(`server/turn.py:191`, `:253`).
    - 액터 쪽: 큐가 들어온 순서대로 하나씩 보낸다.
-   - 화면 쪽: 리듀서가 생각·말하는 중의 탭을 무시한다(`web/js/ui_state.js:51`).
+   - 화면 쪽: 리듀서가 생각·말하는 중의 탭을 무시한다(`web/js/ui_state.js:48`). 그사이 들어온 최종 인식 결과도 새 턴을 열지 않는다(`:58`).
 5. **시간 초과:** `.result(timeout)`이 시간 초과를 내면 다음 순서로 처리한다(`:425`–`428`, `:330`–`333`).
    - 기다림을 취소하고, 루프에 `abandon(turn)`을 맡긴다.
    - 그 턴이 줄 서 있었다면 보내지 않고 버린다(`:255`–`256`).
@@ -59,7 +61,7 @@
 **단점:**
 - future가 두 종류다: 루프 안의 `asyncio.Future`와 HTTP 스레드가 받는 `concurrent.futures.Future`.
 - 루프가 닫힌 뒤 코루틴을 맡기면 `RuntimeError`가 난다. 그래서 `_schedule`이 이를 잡아 코루틴을 닫는다(`:191`–`197`).
-- 액터가 아주 짧은 순간에 죽으면 `LLMError` 대신 시간 초과로 끝나는 경합이 하나 남아 있다(Task 4 자기 검토). 어느 쪽이든 준비된 대사로 이어진다.
+- 액터가 아주 짧은 순간에 죽으면 `LLMError` 대신 시간 초과로 끝나는 경합이 하나 남아 있다. `complete()`가 "액터가 죽었나"를 확인한 바로 뒤, 루프가 다 정리된 다음에 `submit`이 돌면 아무도 채우지 않는 future를 8초 동안 기다리기 때문이다. 어느 쪽이든 준비된 대사로 이어진다.
 
 ### 방식 B: 전부 asyncio로 (asyncio HTTP 서버)
 
@@ -102,21 +104,21 @@
 
 - **쉬워지는 것:**
   - 턴 처리 코드(`server/turn.py`)가 동기 함수와 제너레이터만으로 읽힌다.
-  - ack 줄을 LLM보다 먼저 보내는 것이 `yield` 한 줄이다(`server/turn.py:181`).
+  - ack 줄을 LLM보다 먼저 보내는 것이 `yield` 한 줄이다(`server/turn.py:256`).
   - 테스트: 가짜 `ClaudeSDKClient`를 넣어 액터의 시간 초과, interrupt, 줄 선 턴 버리기, 충돌을 쿼터 없이 시험한다(`tests/py/test_claude_agent_options.py:236`, `:248`, `:301`).
 - **어려워지는 것:**
-  - 서버의 잠금이 ack 줄의 `yield`를 지나서까지 잡혀 있다. 그래서 동시에 들어온 두 번째 턴은 **ack까지** 첫 턴이 끝날 때까지(최대 약 8초) 기다린다(Task 6 우려 4). 화면 리듀서가 연달아 누르기를 막으니 실제로는 생기지 않는다.
+  - 서버의 잠금이 ack 줄의 `yield`를 지나서까지 잡혀 있다. 그래서 동시에 들어온 두 번째 턴은 **ack까지** 첫 턴이 끝날 때까지(최대 약 8초) 기다린다. 잠금을 첫 줄 앞에서 놓지 않은 것은 일부러다. M2의 첫 줄(fast)이 세션 상태(부화)를 바꾸므로 그 계산까지 잠금 안에 있어야 한다. 화면 리듀서가 연달아 누르기를 막으니 실제로는 생기지 않는다.
   - 잠금을 쥔 채 ack를 `yield`하므로, 핸들러는 `finally`에서 반드시 `lines.close()`를 불러 제너레이터를 닫는다(`server/app.py:182`–`183`). 아이 화면이 언제 떠났는지에 따라 결과가 다르다.
     - **ack 줄을 쓰다가 실패하면**(`server/app.py:177`에서 쓰기 오류): `lines.close()`가 `yield` 자리에서 제너레이터를 끝내며 잠금을 푼다. LLM은 불리지 않고 로그도 쓰지 않는다.
-    - **ack 줄이 나간 뒤에 아이 화면이 떠나면:** 서버는 아직 그 사실을 모르고 `server/app.py:178`에서 제너레이터를 다시 돌린다. 턴은 끝까지 간다. LLM을 부르고(`server/turn.py:184` → `:203`, 쿼터를 쓴다), 세션 로그에 턴 한 줄을 쓴다(`server/turn.py:187`). 버려지는 것은 reply 줄 쓰기뿐이다. 그 쓰기 오류(BrokenPipe 등)는 `server/app.py:180`–`181`이 조용히 삼킨다.
+    - **ack 쓰기가 성공한 뒤에 아이 화면이 떠나면:** 서버는 아직 그 사실을 모르고 `server/app.py:178`에서 제너레이터를 다시 돌린다. 턴은 끝까지 간다. LLM을 부르고(`server/turn.py:262` → `:303`, 쿼터를 쓴다), 세션 로그에 턴 한 줄을 쓴다(`server/turn.py:265`). 버려지는 것은 reply 줄 쓰기뿐이다. 그 쓰기 오류(BrokenPipe 등)는 `server/app.py:180`–`181`이 조용히 삼킨다.
   - `end_session`은 액터 스레드를 최대 5초 기다린다(`:437`–`444`). bench에서는 474 ms였다.
 - **나중에 다시 볼 것:**
-  - M2의 fastpath 줄(`fast`)은 이 잠금 안에서 첫 줄을 계산한다. 그래서 부화 상태 같은 세션 상태를 안전하게 바꿀 수 있다(Task 13).
+  - M2의 fastpath 줄(`fast`)은 이 잠금 안에서 첫 줄을 계산한다. 그래서 부화 상태 같은 세션 상태를 안전하게 바꿀 수 있다(Task 13에서 그렇게 했다, `server/turn.py:253`–`261`).
   - 여러 탭이나 여러 아이를 지원하게 되면(지금은 비목표) 세션별 잠금과 세션별 액터를 다시 설계한다.
 
 ## Action Items
 
 1. [x] `_Session` 액터, `complete`의 다리, 시간 초과 → interrupt → result까지 읽기 (Task 4)
 2. [x] `TurnOrchestrator` 잠금과 직렬화 테스트 (`tests/py/test_turn.py:113`, Task 6)
-3. [x] ack가 LLM 전에 flush되는지 보는 시간 테스트 (`tests/py/test_api_turn.py:72`)
-4. [ ] M2 Task 13: fastpath 첫 줄을 같은 잠금 안에서 계산
+3. [x] ack가 LLM 전에 flush되는지 보는 시간 테스트 (`tests/py/test_api_turn.py:86`)
+4. [x] M2 Task 13: fastpath 첫 줄을 같은 잠금 안에서 계산 (`server/turn.py:253`–`256`)
