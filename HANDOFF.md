@@ -12,25 +12,21 @@
 |---|---|
 | 무엇 | 6~7세 아이 한 명이 영어로 말하면 놀이판(멍멍이 "Chomp" + 아기 공룡)이 움직이는 집 전용 영어 말하기 앱. "영어 한마디가 곧 조종 버튼" |
 | 구조 | Python 표준 라이브러리 서버(127.0.0.1:8771) + 순수 HTML/CSS/JS. 턴마다 NDJSON 2줄: 1줄 fastpath 즉시 반응, 2줄 로컬 Claude Code(haiku) 답 |
-| 진행 | **M0~M2 완료, `main`에 머지됨.** 커밋 41개, pytest 1161 통과(live 2개 제외), node 190 통과 |
+| 진행 | **M0~M2 완료, `main`에 머지·GitHub 공개됨.** 커밋 43개, pytest 1161 통과(live 2개 제외), node 190 통과 |
 | 다음 | 아이 실사용 테스트 → M3(응답 속도 + 학습 보조 기능) |
 | 실행 | `실행.bat` 더블클릭(또는 바탕화면 바로가기). 브라우저는 **Edge**, 주소는 **http://127.0.0.1:8771/** |
 | 문서 | 서버를 켜고 http://127.0.0.1:8771/docs/ (C4 3장, 시퀀스 2장, ADR 4개, 워크스루 M0~M2) |
 
-## 2. 지금 진행 중인 일 (다른 세션은 건드리지 말 것)
+## 2. 지금 진행 중인 일
 
-### 2-1. GitHub 공개 저장소 push — 담당: 공개 준비를 한 원래 세션
-- 목표: `https://github.com/yurakwp-pixel/kids-english` (public)에 `main`을 올린다.
-- 끝난 것
-  - 공개용 이력 정리: 모든 커밋에서 벤치마크 문서, 아이 개인 정보 표현, PC 경로를 제거했고, 작성자를 GitHub noreply 이메일로 바꿨다(이력 재작성, 아직 한 번도 push 안 함).
-  - 정리 커밋: README에 "개인·비상업, Chomp는 직접 그린 팬아트, Nintendo와 무관" 안내. 벤치마크 문서는 로컬 `docs/benchmark/`에만 있고 git에서 제외.
-  - 이 폴더의 로컬 git 설정은 noreply 이메일이다. **다른 이메일로 커밋하지 말 것.**
-- 남은 것
-  1. 사용자가 GitHub에서 빈 저장소 `kids-english`를 만든다(README·license 없이, Public).
-  2. `git remote add origin https://github.com/yurakwp-pixel/kids-english.git` → `git push -u origin main`
-  3. 웹에서 커밋 작성자, 파일 목록(benchmark 없음), README 표시 확인.
-  4. 확인 후 이력 재작성 백업 정리: `git update-ref -d refs/original/refs/heads/main`
-- **push 전까지 다른 세션은 `main`에 커밋하지 말 것.** 작업은 브랜치나 워크트리에서 하고, push가 끝난 뒤 머지한다.
+- 없음. (작업을 시작한 세션은 4절 표의 "담당"을 채우고 여기에 한 줄로 적는다.)
+
+### 완료: GitHub 공개 저장소 (2026-10-26)
+- 원격: `origin` = https://github.com/yurakwp-pixel/kids-english (public), `main`이 `origin/main`을 추적한다.
+- 공개 전에 이력을 재작성했다: 모든 커밋에서 벤치마크 문서, 아이 개인 정보 표현, PC 경로를 제거했고 작성자를 GitHub noreply 이메일로 바꿨다. **이미 push한 이력은 다시 재작성하지 않는다(force-push 금지).**
+- 이 폴더의 로컬 git 설정은 noreply 이메일이다. **다른 이메일로 커밋하지 말 것.**
+- 벤치마크 문서는 로컬 `docs/benchmark/`에만 있고 git에서 제외된다(`.gitignore`).
+- push는 사용자가 요청할 때만 한다. 레인 브랜치는 로컬에서 머지한 뒤 `main`을 push한다.
 
 ## 3. 반드시 지킬 것 (요약 — 원문은 `CLAUDE.md`, spec)
 
@@ -71,7 +67,6 @@
 1. 아이 실사용 테스트 결과 (README의 체크리스트 5가지)
 2. 슈니비니 카드 A·B 전체 목록 사진 → 레인 B
 3. 레인 A 재측정용 쿼터 사용 승인 (haiku 약 20턴)
-4. GitHub 빈 저장소 생성 → 2-1절
 
 ## 7. 참고 문서
 
