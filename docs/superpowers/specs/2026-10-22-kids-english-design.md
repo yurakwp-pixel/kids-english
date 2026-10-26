@@ -2,7 +2,7 @@
 
 - 작성: 2026-10-22
 - 상태: 초안 (사용자 승인 대기)
-- 관련 문서: [알레프키즈 벤치마킹](../../benchmark/aleph-kids.html) · [슈니비니 벤치마킹](../../benchmark/shunibini.md) · 승인된 실행 계획 `~/.claude/plans/ancient-foraging-stallman.md`
+- 관련 문서: 승인된 실행 계획 `~/.claude/plans/ancient-foraging-stallman.md`. 벤치마킹 문서(알레프키즈, 슈니비니 카드)는 공개 저장소에 넣지 않았다(로컬 `docs/benchmark/`, git 제외).
 
 ---
 
